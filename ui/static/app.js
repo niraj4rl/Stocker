@@ -158,17 +158,28 @@ function renderEquityChart(allReturns) {
   });
 }
 
-async function loadTickers() {
-  const data = await api("/api/tickers");
-  state.tickers = data.tickers || [];
-
+function updateDatalist(query) {
   const list = $("tickerList");
   list.innerHTML = "";
-  state.tickers.forEach((ticker) => {
+  const cleanQuery = (query || "").trim().toUpperCase();
+
+  const filtered = state.tickers.filter((t) => {
+    const base = t.replace(".NS", "");
+    return t.startsWith(cleanQuery) || base.startsWith(cleanQuery);
+  });
+
+  filtered.slice(0, 100).forEach((ticker) => {
     const option = document.createElement("option");
     option.value = ticker;
     list.appendChild(option);
   });
+}
+
+async function loadTickers() {
+  const data = await api("/api/tickers");
+  state.tickers = data.tickers || [];
+
+  updateDatalist("");
 
   $("tickerInput").value = data.default || "RELIANCE.NS";
 
@@ -180,6 +191,7 @@ async function loadTickers() {
     btn.textContent = ticker.replace(".NS", "");
     btn.addEventListener("click", () => {
       $("tickerInput").value = ticker;
+      updateDatalist(ticker);
     });
     quick.appendChild(btn);
   });
@@ -361,6 +373,9 @@ async function exportCsv(path) {
 
 function bindEvents() {
   $("runLive").addEventListener("click", runLivePrediction);
+  $("tickerInput").addEventListener("input", (e) => {
+    updateDatalist(e.target.value);
+  });
 }
 
 async function init() {

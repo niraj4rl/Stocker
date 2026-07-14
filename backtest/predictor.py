@@ -27,6 +27,31 @@ from utils.metrics import compute_all_metrics
 from dateutil.relativedelta import relativedelta
 
 
+def _get_model_name(model) -> str:
+    if model is None:
+        return "unknown"
+    estimator = model
+    if hasattr(model, "steps"):
+        estimator = model.steps[-1][1]
+    
+    class_name = estimator.__class__.__name__.lower()
+    if "xgb" in class_name:
+        return "xgb"
+    elif "randomforest" in class_name:
+        return "rf"
+    elif "ridge" in class_name:
+        return "ridge"
+    elif "svc" in class_name:
+        return "svc"
+    elif "svr" in class_name:
+        return "svr"
+    elif "kneighbors" in class_name:
+        return "knn"
+    elif "mlp" in class_name:
+        return "mlp"
+    return class_name
+
+
 class StockerPredictor:
     def __init__(self, ticker: str, data_source: str = "yfinance", access_token: str = ""):
         self.ticker = ticker
@@ -160,6 +185,54 @@ class StockerPredictor:
         position_size = min(position_size, regime_cap)
         result["position_size"] = round(float(position_size), 3)
         result["recent_vol_ann"] = round(recent_vol * 100, 2)
+
+        if "error" not in result:
+            try:
+                from models.model_io_store import ModelIOStore, ModelIORecord
+                # Extract input features as clean JSON dict
+                raw_inputs = last_row[feat_cols].to_dict()
+                input_payload = {}
+                for k, v in raw_inputs.items():
+                    if isinstance(v, (np.floating, float)):
+                        input_payload[str(k)] = float(v)
+                    elif isinstance(v, (np.integer, int)):
+                        input_payload[str(k)] = int(v)
+                    else:
+                        input_payload[str(k)] = v
+
+                # Extract output details
+                output_payload = {}
+                if paradigm == PARADIGM_REGRESSION:
+                    output_payload = {
+                        "predicted_return": float(pred_return),
+                        "predicted_price": float(result.get("predicted_price") or 0.0),
+                        "signal": result.get("signal", "Hold")
+                    }
+                else:
+                    output_payload = {
+                        "predicted_class": str(pred_label),
+                        "confidence": float(result["confidence"]) if result.get("confidence") is not None else None,
+                        "signal": result.get("signal", "Hold")
+                    }
+
+                model_name = _get_model_name(model)
+
+                record = ModelIORecord(
+                    ticker=self.ticker,
+                    paradigm=paradigm,
+                    model_name=model_name,
+                    context="live_prediction",
+                    input_payload=input_payload,
+                    output_payload=output_payload,
+                    regime=regime,
+                    actual_price=None,
+                    predicted_at=datetime.now().isoformat()
+                )
+                io_store = ModelIOStore()
+                io_store.log_io(record)
+                io_store.close()
+            except Exception as exc:
+                print(f"[predictor] Failed to log live prediction I/O: {exc}")
 
         return result
 

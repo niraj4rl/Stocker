@@ -253,6 +253,14 @@ def live_prediction(payload: LivePredictionRequest) -> dict:
     except Exception:
         regime_stats = []
 
+    last_dt = pd.to_datetime(df.index.max())
+    if getattr(last_dt, "tzinfo", None) is not None:
+        last_dt = last_dt.tz_convert("UTC").tz_localize(None)
+    now_utc = datetime.utcnow()
+    data_age_days = int((now_utc - last_dt).days)
+    data_as_of_date = last_dt.strftime("%Y-%m-%d")
+    stale_data_warning = bool(data_age_days > 3)
+
     return {
         "result": result,
         "cache": {
@@ -266,6 +274,9 @@ def live_prediction(payload: LivePredictionRequest) -> dict:
             "regime_colors": REGIME_COLORS,
         },
         "regime_stats": regime_stats,
+        "data_as_of_date": data_as_of_date,
+        "data_age_days": data_age_days,
+        "stale_data_warning": stale_data_warning,
     }
 
 

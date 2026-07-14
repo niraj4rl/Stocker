@@ -32,6 +32,31 @@ from utils.config import (
 )
 
 
+def _get_model_name(model) -> str:
+    if model is None:
+        return "unknown"
+    estimator = model
+    if hasattr(model, "steps"):
+        estimator = model.steps[-1][1]
+    
+    class_name = estimator.__class__.__name__.lower()
+    if "xgb" in class_name:
+        return "xgb"
+    elif "randomforest" in class_name:
+        return "rf"
+    elif "ridge" in class_name:
+        return "ridge"
+    elif "svc" in class_name:
+        return "svc"
+    elif "svr" in class_name:
+        return "svr"
+    elif "kneighbors" in class_name:
+        return "knn"
+    elif "mlp" in class_name:
+        return "mlp"
+    return class_name
+
+
 def run_backtest(
     ticker: str,
     verbose: bool = True,
@@ -46,6 +71,8 @@ def run_backtest(
 
     run_id = str(uuid.uuid4())[:8]
     store = ScorecardStore()
+    model_io_records = []
+    trainer = None
 
     raw = load_or_fetch(ticker, data_source=data_source, access_token=access_token)
     df = build_features(raw)
@@ -184,6 +211,69 @@ def run_backtest(
                 bh_position_open = True
             bh_rets.append(bh_return)
 
+            # Record prediction details for this step of backtest
+            if model is not None and feat_cols is not None and not np.isnan(row[feat_cols].values).any():
+                try:
+                    X = row[feat_cols].values.reshape(1, -1)
+                    if paradigm == PARADIGM_REGRESSION:
+                        pred_return = float(model.predict(X)[0])
+                        bounds = None
+                        if regime in registry and paradigm in registry[regime]:
+                            bounds = registry[regime][paradigm].get("prediction_bounds")
+                        if bounds and len(bounds) == 2:
+                            pred_return = float(np.clip(pred_return, bounds[0], bounds[1]))
+                        current_price = float(row["Close"])
+                        pred_price = current_price * (1 + pred_return)
+                        sig_str = "Buy" if pred_return > SIGNAL_DEADBAND else ("Sell" if pred_return < -SIGNAL_DEADBAND else "Hold")
+                        output_payload = {
+                            "predicted_return": float(pred_return),
+                            "predicted_price": float(pred_price),
+                            "signal": sig_str
+                        }
+                    else:
+                        pred_label = model.predict(X)[0]
+                        try:
+                            proba = model.predict_proba(X)[0]
+                            confidence = float(max(proba)) if len(proba) > 0 else None
+                        except Exception:
+                            confidence = None
+                        signal_map = {"strong_up": "Buy", "neutral": "Hold", "strong_down": "Sell"}
+                        sig_str = signal_map.get(pred_label, "Hold")
+                        output_payload = {
+                            "predicted_class": str(pred_label),
+                            "confidence": confidence,
+                            "signal": sig_str
+                        }
+
+                    raw_inputs = row[feat_cols].to_dict()
+                    input_payload = {}
+                    for k, v in raw_inputs.items():
+                        if isinstance(v, (np.floating, float)):
+                            input_payload[str(k)] = float(v)
+                        elif isinstance(v, (np.integer, int)):
+                            input_payload[str(k)] = int(v)
+                        else:
+                            input_payload[str(k)] = v
+
+                    model_name = _get_model_name(model)
+
+                    from models.model_io_store import ModelIORecord
+                    record = ModelIORecord(
+                        ticker=ticker,
+                        run_id=run_id,
+                        regime=regime,
+                        paradigm=paradigm,
+                        model_name=model_name,
+                        context="backtest",
+                        input_payload=input_payload,
+                        output_payload=output_payload,
+                        actual_price=None,
+                        predicted_at=date.isoformat() if hasattr(date, "isoformat") else str(date)
+                    )
+                    model_io_records.append(record)
+                except Exception:
+                    pass
+
         fold_metrics = {
             "fold": fold,
             "test_start": str(test_df.index[0].date()),
@@ -223,6 +313,17 @@ def run_backtest(
     )
     store.close()
 
+    # Log model I/O records in bulk
+    if model_io_records:
+        try:
+            from models.model_io_store import ModelIOStore
+            io_store = ModelIOStore()
+            io_store.log_io_batch(model_io_records)
+            io_store.close()
+            print(f"[backtest] Successfully logged {len(model_io_records)} model I/O records to database.")
+        except Exception as exc:
+            print(f"[backtest] Failed to log model I/O records: {exc}")
+
     print("\n=== Overall Results ===")
     for strategy, metrics in overall.items():
         print(f"  {strategy:30s} Sharpe={metrics['sharpe']:.3f}  "
@@ -237,7 +338,7 @@ def run_backtest(
         "fold_results": fold_results,
         "overall": overall,
         "all_returns": all_returns,
-        "all_evaluations": trainer.all_evaluations,
+        "all_evaluations": trainer.all_evaluations if trainer else [],
         "execution_assumptions": {
             "transaction_cost_bps": TRANSACTION_COST_BPS,
             "slippage_bps": SLIPPAGE_BPS,
