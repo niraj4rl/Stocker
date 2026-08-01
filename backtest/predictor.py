@@ -27,29 +27,40 @@ from utils.metrics import compute_all_metrics
 from dateutil.relativedelta import relativedelta
 
 
+MODEL_DISPLAY_NAMES = {
+    "xgb": "XGBoost",
+    "rf": "Random Forest",
+    "ridge": "Ridge Regression",
+    "svc": "Support Vector (SVC)",
+    "svr": "Support Vector (SVR)",
+    "knn": "K-Nearest Neighbors",
+    "mlp": "Neural Network (MLP)",
+}
+
+
 def _get_model_name(model) -> str:
     if model is None:
-        return "unknown"
+        return "Unknown"
     estimator = model
     if hasattr(model, "steps"):
         estimator = model.steps[-1][1]
     
     class_name = estimator.__class__.__name__.lower()
     if "xgb" in class_name:
-        return "xgb"
+        return "XGBoost"
     elif "randomforest" in class_name:
-        return "rf"
+        return "Random Forest"
     elif "ridge" in class_name:
-        return "ridge"
+        return "Ridge Regression"
     elif "svc" in class_name:
-        return "svc"
+        return "Support Vector (SVC)"
     elif "svr" in class_name:
-        return "svr"
+        return "Support Vector (SVR)"
     elif "kneighbors" in class_name:
-        return "knn"
+        return "K-Nearest Neighbors"
     elif "mlp" in class_name:
-        return "mlp"
-    return class_name
+        return "Neural Network (MLP)"
+    return class_name.title()
 
 
 class StockerPredictor:
@@ -105,6 +116,21 @@ class StockerPredictor:
 
         model, paradigm, feat_cols = self.router.get_model(self.registry, regime)
 
+        model_name = _get_model_name(model)
+        if regime in self.registry and paradigm in self.registry[regime]:
+            raw_name = self.registry[regime][paradigm].get("model_name")
+            if raw_name:
+                model_name = MODEL_DISPLAY_NAMES.get(raw_name, raw_name.title())
+
+        regime_models = {}
+        if self.registry:
+            for r, winning_paradigm in self.router.lookup.items():
+                if r in self.registry and winning_paradigm in self.registry[r]:
+                    raw_m = self.registry[r][winning_paradigm].get("model_name")
+                    m_obj = self.registry[r][winning_paradigm].get("model")
+                    m_display = MODEL_DISPLAY_NAMES.get(raw_m, _get_model_name(m_obj))
+                    regime_models[r] = m_display
+
         last_row = self.df.iloc[-1]
 
         current_price, price_source, price_is_fallback = self._fetch_live_price(float(last_row["Close"]))
@@ -117,6 +143,8 @@ class StockerPredictor:
             "current_price_is_fallback": price_is_fallback,
             "regime": regime,
             "paradigm": paradigm,
+            "ml_model": model_name,
+            "regime_models": regime_models,
             "routing_table": self.router.lookup.copy(),
             "prediction": None,
             "signal": "Hold",

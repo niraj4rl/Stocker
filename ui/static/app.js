@@ -217,7 +217,8 @@ async function runLivePrediction() {
     const metrics = [
       { label: "Current Price", value: `INR ${Number(result.current_price).toFixed(2)}` },
       { label: "Regime", value: result.regime },
-      { label: "Model", value: result.paradigm },
+      { label: "Strategy", value: result.paradigm },
+      { label: "ML Model", value: result.ml_model || "XGBoost" },
     ];
 
     $("liveMetrics").innerHTML = metrics

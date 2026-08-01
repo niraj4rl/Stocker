@@ -122,12 +122,14 @@ class ModelTrainer:
             self.registry[regime] = {
                 PARADIGM_REGRESSION: {
                     "model": best_reg["model"] if best_reg else None,
+                    "model_name": best_reg["name"] if best_reg else "unknown",
                     "sharpe": reg_sharpe,
                     "feature_cols": feat_cols,
                     "prediction_bounds": self._prediction_bounds(y_reg),
                 },
                 PARADIGM_CLASSIFICATION: {
                     "model": best_cls["model"] if best_cls else None,
+                    "model_name": best_cls["name"] if best_cls else "unknown",
                     "sharpe": cls_sharpe,
                     "feature_cols": feat_cols,
                 },

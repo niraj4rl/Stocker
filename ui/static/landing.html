@@ -3,27 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>stocker</title>
+  <title>stocker — we stalk stocks for you</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,400&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+
   <style>
     :root {
       --bg: #ffffff;
+      --bg-alt: #f5f7fa;
       --fg: #111827;
       --muted: #6b7280;
-      --dot: #cbd5e1;
-      --glow: rgba(37, 99, 235, 0.12);
+      --blue: #2563eb;
+      --blue-hover: #1d4ed8;
+      --border: #e5e7eb;
     }
 
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
-    body {
-      margin: 0;
-      min-height: 100vh;
+    html, body {
+      height: 100%;
       background: radial-gradient(circle at 50% 46%, #ffffff 0%, #f5f7fa 68%);
       color: var(--fg);
+      font-family: 'Manrope', sans-serif;
       overflow: hidden;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
     .background-glow {
@@ -31,98 +39,175 @@
       inset: 0;
       pointer-events: none;
       background: radial-gradient(circle at 72% 74%, rgba(37, 99, 235, 0.08), transparent 36%);
-      z-index: 1;
+      z-index: 0;
     }
 
     #surface {
       position: fixed;
       inset: 0;
-      z-index: 0;
+      z-index: 1;
       pointer-events: none;
     }
 
-    .overlay {
+    #surface canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    /* Fixed Navigation Header */
+    nav.nav-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 100;
+      padding: 1.75rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-family: 'Fraunces', serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--fg);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-buttons {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .btn-nav-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      background: var(--blue);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.65rem 1.3rem;
+      border-radius: 12px;
+      border: 1px solid #1d4ed8;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2);
+      transition: all 0.22s ease;
+    }
+
+    .btn-nav-primary:hover {
+      background: var(--blue-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+    }
+
+    .btn-nav-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--fg);
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.65rem 1.3rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+      transition: all 0.22s ease;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    .btn-nav-secondary:hover {
+      background: #ffffff;
+      border-color: #d1d5db;
+      transform: translateY(-1px);
+    }
+
+    .badge-soon {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.15rem 0.45rem;
+      background: #f59e0b1f;
+      color: #b45309;
+      border: 1px solid #f59e0b40;
+      font-weight: 700;
+      border-radius: 999px;
+    }
+
+    /* Minimal Hero Container */
+    .hero-container {
       position: relative;
-      z-index: 2;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
+      z-index: 10;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
       text-align: center;
       padding: 2rem;
+      transform: translateY(-2vh);
     }
 
-    .overlay-content {
-      transform: translateY(-4vh);
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(2.25rem, 6vw, 5rem);
-      letter-spacing: 0.08em;
+    .hero-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(3.8rem, 9vw, 7rem);
       font-weight: 700;
-      text-shadow: 0 0 35px var(--glow);
+      color: #111827;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 1.25rem;
     }
 
-    p {
-      margin: 0.9rem 0 2rem;
-      color: var(--muted);
-      font-size: clamp(0.9rem, 1.3vw, 1.1rem);
-      letter-spacing: 0.04em;
-    }
-
-    .cta {
-      display: inline-block;
-      text-decoration: none;
-      color: #2563eb;
-      border: 1px solid rgba(37, 99, 235, 0.35);
-      border-radius: 999px;
-      padding: 0.82rem 1.45rem;
-      transition: 220ms ease;
-      background: rgba(37, 99, 235, 0.08);
-      backdrop-filter: blur(8px);
-    }
-
-    .cta:hover {
-      transform: translateY(-1px);
-      border-color: rgba(37, 99, 235, 0.6);
-      background: rgba(37, 99, 235, 0.14);
+    .hero-subtitle {
+      font-size: clamp(1.15rem, 2.2vw, 1.65rem);
+      font-weight: 400;
+      color: #6b7280;
+      letter-spacing: 0.03em;
     }
   </style>
 </head>
 <body>
+
   <div class="background-glow"></div>
   <div id="surface"></div>
 
-  <div class="overlay">
-    <div class="overlay-content">
-      <h1>Stocker</h1>
-      <p>we stalk stocks for you</p>
-      <a class="cta" href="/app">Open Dashboard</a>
+  <!-- Top Right Navigation Buttons -->
+  <nav class="nav-header">
+    <a href="/" class="nav-brand">stocker</a>
+    <div class="nav-buttons">
+      <a href="/app" class="btn-nav-primary">
+        <span>Stock Predictions</span>
+      </a>
+      <button onclick="showNiftyNotice()" class="btn-nav-secondary">
+        <span>Nifty 50 Prediction</span>
+        <span class="badge-soon">Soon</span>
+      </button>
     </div>
-  </div>
+  </nav>
+
+  <!-- Whole Landing Page Content: Minimal Title + Subtitle -->
+  <main class="hero-container">
+    <h1 class="hero-title">stocker</h1>
+    <p class="hero-subtitle">we stalk stocks for you</p>
+  </main>
 
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
 
     const container = document.getElementById('surface');
-    if (!container) {
-      throw new Error('surface container not found');
-    }
-
-    const SEPARATION = 120;
-    const AMOUNT_X = 42;
-    const AMOUNT_Y = 62;
-
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xf5f7fa, 1700, 9200);
+    scene.fog = new THREE.Fog(0xf5f7fa, 1400, 4800);
 
-    const camera = new THREE.PerspectiveCamera(
-      58,
-      window.innerWidth / window.innerHeight,
-      1,
-      10000,
-    );
-    camera.position.set(0, 350, 1200);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.set(0, 380, 1150);
+    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -130,76 +215,101 @@
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
 
-    const positions = [];
-    const colors = [];
+    const SEPARATION = 75;
+    const AMOUNT_X = 48;
+    const AMOUNT_Y = 65;
+    const numParticles = AMOUNT_X * AMOUNT_Y;
 
+    const positions = new Float32Array(numParticles * 3);
+    const colors = new Float32Array(numParticles * 3);
+
+    // Dark grey color palette (ranging from dark slate grey to heavy dark grey)
+    const darkGreyTop = new THREE.Color(0x6b7280); // Dark slate grey (#6b7280)
+    const darkGreyMid = new THREE.Color(0x374151); // Deep dark grey (#374151)
+    const darkGreyBot = new THREE.Color(0x1f2937); // Heavy dark grey (#1f2937)
+
+    let i = 0;
     for (let x = 0; x < AMOUNT_X; x++) {
       for (let y = 0; y < AMOUNT_Y; y++) {
-        positions.push(
-          x * SEPARATION - (AMOUNT_X * SEPARATION) / 2,
-          0,
-          y * SEPARATION - (AMOUNT_Y * SEPARATION) / 2,
-        );
-        colors.push(1.0, 1.0, 1.0);
+        positions[i * 3 + 0] = x * SEPARATION - (AMOUNT_X * SEPARATION) / 2;
+        positions[i * 3 + 1] = 0;
+        positions[i * 3 + 2] = y * SEPARATION - (AMOUNT_Y * SEPARATION) / 2 + 500;
+
+        // y goes from 0 (middle/top) to 65 (bottom)
+        // Transition from dark grey top to heavy dark grey bottom
+        const progressY = y / (AMOUNT_Y - 1);
+        const c = darkGreyTop.clone().lerp(progressY > 0.5 ? darkGreyBot : darkGreyMid, Math.pow(progressY, 1.2));
+
+        colors[i * 3 + 0] = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
+
+        i++;
       }
     }
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-      size: 5,
+      size: 9.0,
       vertexColors: true,
       transparent: true,
-      opacity: 0.78,
-      sizeAttenuation: true,
+      opacity: 1.0,
+      sizeAttenuation: true
     });
 
     const points = new THREE.Points(geometry, material);
     scene.add(points);
 
+    let mouseX = 0;
+    let mouseY = 0;
+    window.addEventListener('mousemove', (e) => {
+      mouseX = (e.clientX - window.innerWidth / 2) * 0.12;
+      mouseY = (e.clientY - window.innerHeight / 2) * 0.12;
+    });
+
     let tick = 0;
-    let rafId = 0;
+    function animate() {
+      requestAnimationFrame(animate);
 
-    const animate = () => {
-      rafId = requestAnimationFrame(animate);
+      camera.position.x += (mouseX - camera.position.x) * 0.05;
+      camera.position.y += (-mouseY + 380 - camera.position.y) * 0.05;
+      camera.lookAt(0, 0, 0);
 
-      const attr = geometry.attributes.position;
-      const pos = attr.array;
-      let i = 0;
+      const posAttr = geometry.attributes.position;
+      const posArray = posAttr.array;
+      let ptr = 0;
 
       for (let x = 0; x < AMOUNT_X; x++) {
         for (let y = 0; y < AMOUNT_Y; y++) {
-          const idx = i * 3;
-          pos[idx + 1] =
-            Math.sin((x + tick) * 0.28) * 48 +
-            Math.sin((y + tick) * 0.47) * 48;
-          i++;
+          const idx = ptr * 3;
+          posArray[idx + 1] =
+            Math.sin((x + tick) * 0.25) * 48 +
+            Math.sin((y + tick) * 0.42) * 48;
+          ptr++;
         }
       }
 
-      attr.needsUpdate = true;
+      posAttr.needsUpdate = true;
       renderer.render(scene, camera);
-      tick += 0.095;
-    };
+      tick += 0.06;
+    }
+    animate();
 
-    const onResize = () => {
+    window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-
-    window.addEventListener('resize', onResize);
-    animate();
-
-    window.addEventListener('beforeunload', () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', onResize);
-      geometry.dispose();
-      material.dispose();
-      renderer.dispose();
     });
   </script>
+
+  <script>
+    function showNiftyNotice() {
+      alert('Nifty 50 Prediction module is currently under active development.');
+    }
+  </script>
+
 </body>
 </html>
