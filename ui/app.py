@@ -305,7 +305,7 @@ def live_prediction(payload: LivePredictionRequest) -> dict:
     now_utc = datetime.utcnow()
     data_age_days = int((now_utc - last_dt).days)
     data_as_of_date = last_dt.strftime("%Y-%m-%d")
-    stale_data_warning = bool(data_age_days > 3)
+    stale_data_warning = bool(data_age_days > 4)
 
     return {
         "result": result,
@@ -321,6 +321,8 @@ def live_prediction(payload: LivePredictionRequest) -> dict:
         },
         "regime_stats": regime_stats,
         "data_as_of_date": data_as_of_date,
+        "historical_data_date": data_as_of_date,
+        "live_quote_time": datetime.now().strftime("%I:%M:%S %p"),
         "data_age_days": data_age_days,
         "stale_data_warning": stale_data_warning,
     }
@@ -395,7 +397,6 @@ def analysis(ticker: Optional[str] = None) -> dict:
 
     scores_df = pd.DataFrame(all_scores)
     tickers = sorted(scores_df["ticker"].dropna().unique().tolist()) if "ticker" in scores_df.columns else []
-
     selected_ticker = ticker.strip().upper() if ticker else None
     stat_results = get_statistical_comparison(selected_ticker)
 

@@ -237,7 +237,7 @@ async function runLivePrediction(forceRefresh = false) {
           <span class='text-[10px] px-1.5 py-0.5 rounded font-medium' style='background:${srcInfo.color}18;color:${srcInfo.color};border:1px solid ${srcInfo.color}44'>${srcInfo.label}</span>
         </div>
         <p class='text-lg font-semibold mt-1'>INR ${Number(result.current_price).toFixed(2)}</p>
-        <p class='text-[11px] text-ink/60 mt-0.5'>Data date: ${data.data_as_of_date || "-"}${data.stale_data_warning ? " (Delayed)" : ""}</p>
+        <p class='text-[11px] text-ink/60 mt-0.5' title='Price is live. Historical features trained on closed daily candles.'>Live Quote • Daily candle: ${data.data_as_of_date || "-"}${data.stale_data_warning ? " (Delayed)" : ""}</p>
       </div>
     `;
 
