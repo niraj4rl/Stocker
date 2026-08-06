@@ -22,7 +22,57 @@ from utils.metrics import (
 )
 from features.engineering import get_feature_cols, build_classification_target
 from models.model_scorecard import ModelScorecard, ScorecardStore
+from sklearn.base import BaseEstimator, ClassifierMixin
 import uuid
+
+
+class EncodedXGBClassifier(BaseEstimator, ClassifierMixin):
+    """
+    XGBClassifier wrapper that safely encodes arbitrary string class labels into integers
+    during fit, and maps predictions back to original class strings.
+    """
+    def __init__(
+        self,
+        n_estimators: int = 200,
+        max_depth: int = 4,
+        learning_rate: float = 0.05,
+        random_state: int = 42,
+        verbosity: int = 0,
+        n_jobs: int = -1,
+    ):
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.learning_rate = learning_rate
+        self.random_state = random_state
+        self.verbosity = verbosity
+        self.n_jobs = n_jobs
+        self.classes_ = None
+        self.model_ = None
+
+    def fit(self, X, y):
+        self.classes_, y_int = np.unique(y, return_inverse=True)
+        self.model_ = xgb.XGBClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            learning_rate=self.learning_rate,
+            random_state=self.random_state,
+            verbosity=self.verbosity,
+            n_jobs=self.n_jobs,
+            eval_metric="mlogloss",
+        )
+        self.model_.fit(X, y_int)
+        return self
+
+    def predict(self, X):
+        if self.model_ is None or self.classes_ is None:
+            raise RuntimeError("EncodedXGBClassifier is not fitted")
+        y_int = self.model_.predict(X)
+        return self.classes_[y_int]
+
+    def predict_proba(self, X):
+        if self.model_ is None:
+            raise RuntimeError("EncodedXGBClassifier is not fitted")
+        return self.model_.predict_proba(X)
 
 
 class ModelTrainer:
@@ -292,12 +342,10 @@ class ModelTrainer:
         if self.include_xgb:
             candidates["xgb"] = Pipeline([
                 ("scaler", StandardScaler()),
-                ("model", xgb.XGBClassifier(
+                ("model", EncodedXGBClassifier(
                     n_estimators=self.xgb_estimators,
                     max_depth=4,
                     learning_rate=0.05,
-                    use_label_encoder=False,
-                    eval_metric="mlogloss",
                     random_state=42,
                     verbosity=0,
                     n_jobs=-1,

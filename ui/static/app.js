@@ -198,35 +198,63 @@ async function loadTickers() {
 
 }
 
-async function runLivePrediction() {
-  const payload = {
-    ticker: $("tickerInput").value.trim().toUpperCase(),
-  };
+const priceSourceLabels = {
+  upstox_ltp: { label: "Upstox LTP", color: "#16A34A" },
+  yfinance_live: { label: "Live • Realtime Quote", color: "#16A34A" },
+  yahoo_chart_live: { label: "Live • Yahoo Chart", color: "#16A34A" },
+  nse_quote: { label: "Live • NSE Quote", color: "#16A34A" },
+  historical_close: { label: "Historical Close", color: "#D97706" },
+};
 
-  if (!payload.ticker) {
+async function runLivePrediction(forceRefresh = false) {
+  const ticker = $("tickerInput").value.trim().toUpperCase();
+  if (!ticker) {
     setStatus("Enter a ticker first.", true);
     return;
   }
 
+  const payload = {
+    ticker,
+    force_refresh: Boolean(forceRefresh),
+  };
+
   try {
-    setStatus(`Running live prediction for ${payload.ticker}...`);
+    const actionDesc = forceRefresh ? "Refreshing live data and prediction" : "Running live prediction";
+    setStatus(`${actionDesc} for ${payload.ticker}...`);
     const data = await api("/api/live-prediction", "POST", payload);
 
     const result = data.result;
     const cache = data.cache || {};
-    const metrics = [
-      { label: "Current Price", value: `INR ${Number(result.current_price).toFixed(2)}` },
+    const srcInfo = priceSourceLabels[result.current_price_source] || {
+      label: result.current_price_source || "Market Data",
+      color: "#2563EB",
+    };
+
+    const priceCardHtml = `
+      <div class='soft-card p-3'>
+        <div class='flex items-center justify-between'>
+          <p class='text-xs uppercase tracking-[0.1em] text-ink/60'>Current Price</p>
+          <span class='text-[10px] px-1.5 py-0.5 rounded font-medium' style='background:${srcInfo.color}18;color:${srcInfo.color};border:1px solid ${srcInfo.color}44'>${srcInfo.label}</span>
+        </div>
+        <p class='text-lg font-semibold mt-1'>INR ${Number(result.current_price).toFixed(2)}</p>
+        <p class='text-[11px] text-ink/60 mt-0.5'>Data date: ${data.data_as_of_date || "-"}${data.stale_data_warning ? " (Delayed)" : ""}</p>
+      </div>
+    `;
+
+    const otherMetrics = [
       { label: "Regime", value: result.regime },
       { label: "Strategy", value: result.paradigm },
       { label: "ML Model", value: result.ml_model || "XGBoost" },
     ];
 
-    $("liveMetrics").innerHTML = metrics
-      .map(
-        (m) =>
-          `<div class='soft-card p-3'><p class='text-xs uppercase tracking-[0.1em] text-ink/60'>${m.label}</p><p class='text-lg font-semibold mt-1'>${m.value}</p></div>`
-      )
-      .join("");
+    $("liveMetrics").innerHTML =
+      priceCardHtml +
+      otherMetrics
+        .map(
+          (m) =>
+            `<div class='soft-card p-3'><p class='text-xs uppercase tracking-[0.1em] text-ink/60'>${m.label}</p><p class='text-lg font-semibold mt-1'>${m.value}</p></div>`
+        )
+        .join("");
 
     const signalColor = signalColors[result.signal] || "#6B7280";
     $("signalBadge").innerHTML = `<span class='badge' style='background:${signalColor}22;color:${signalColor};border:1px solid ${signalColor}66'>${result.signal}</span>`;
@@ -234,7 +262,7 @@ async function runLivePrediction() {
     if (result.paradigm === "regression") {
       const ret = Number(result.predicted_return_pct || 0);
       const nextPrice = result.predicted_price ? Number(result.predicted_price).toFixed(2) : "-";
-      $("predictionText").textContent = `Predicted return: ${ret > 0 ? "+" : ""}${ret.toFixed(3)}% | Predicted close: INR ${nextPrice}`;
+      $("predictionText").textContent = `Predicted return: ${ret > 0 ? "+" : ""}${ret.toFixed(3)}% | Target close: INR ${nextPrice}`;
     } else {
       const conf = result.confidence !== null && result.confidence !== undefined ? `${result.confidence}%` : "N/A";
       $("predictionText").textContent = `Direction: ${result.prediction || "-"} | Confidence: ${conf}`;
@@ -245,8 +273,8 @@ async function runLivePrediction() {
       .join("");
     $("routingTable").innerHTML = routing || "<p class='text-sm text-ink/70'>No routing table.</p>";
 
-    const cacheText = cache.hit ? "cache hit" : "retrained";
-    setStatus(`Live prediction completed for ${payload.ticker} (${cacheText}).`);
+    const refreshDesc = forceRefresh ? "force refreshed" : (cache.hit ? "cache hit" : "retrained");
+    setStatus(`Live prediction completed for ${payload.ticker} (${srcInfo.label}, ${refreshDesc}).`);
 
     renderLiveChart((data.chart && data.chart.points) || []);
 
@@ -373,7 +401,11 @@ async function exportCsv(path) {
 }
 
 function bindEvents() {
-  $("runLive").addEventListener("click", runLivePrediction);
+  $("runLive").addEventListener("click", () => runLivePrediction(false));
+  const refreshBtn = $("forceRefreshBtn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => runLivePrediction(true));
+  }
   $("tickerInput").addEventListener("input", (e) => {
     updateDatalist(e.target.value);
   });

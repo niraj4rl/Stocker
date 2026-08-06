@@ -265,32 +265,50 @@ class StockerPredictor:
         return result
 
     def _fetch_live_price(self, fallback_price: float) -> tuple[float, str, bool]:
-        # Always attempt a fresh quote first, independent of model cache.
-        if self.data_source == "upstox" and self.access_token:
+        """
+        Fetch real-time stock quote from multiple live providers.
+        Priority:
+        1. Upstox LTP (if configured)
+        2. yfinance fast_info / 1d intraday
+        3. Yahoo Finance direct chart API
+        4. NSE India direct equity quote API
+        5. Historical dataset close (fallback)
+        """
+        if (self.data_source or "").lower() == "upstox" and self.access_token:
             try:
                 from data.upstox_client import UpstoxDataClient
-
                 client = UpstoxDataClient(self.access_token)
                 px = float(client.get_live_price(self.ticker))
-                return px, "upstox_ltp", False
-            except Exception:
-                pass
+                if px > 0:
+                    return px, "upstox_ltp", False
+            except Exception as e:
+                print(f"[predictor] Upstox live price failed: {e}")
 
+        # Try yfinance fast_info / intraday
+        try:
+            yf_px = _fetch_latest_price_yfinance(self.ticker)
+            if yf_px is not None and yf_px > 0:
+                return float(yf_px), "yfinance_live", False
+        except Exception as e:
+            print(f"[predictor] yfinance live price failed: {e}")
+
+        # Try Yahoo Chart API with browser headers
+        try:
+            yahoo_px = _fetch_latest_price_yahoo_direct(self.ticker)
+            if yahoo_px is not None and yahoo_px > 0:
+                return float(yahoo_px), "yahoo_chart_live", False
+        except Exception as e:
+            print(f"[predictor] Yahoo chart live price failed: {e}")
+
+        # Try NSE India Quote API
         try:
             nse_px = _fetch_latest_price_nse(self.ticker)
-            if nse_px is not None:
+            if nse_px is not None and nse_px > 0:
                 return float(nse_px), "nse_quote", False
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[predictor] NSE live price failed: {e}")
 
-        try:
-            yf_px = _fetch_latest_price_yahoo(self.ticker, fallback_price)
-            if yf_px != fallback_price:
-                return float(yf_px), "yahoo_quote", False
-        except Exception:
-            pass
-
-        # Final fallback: last available close from historical dataset.
+        # Final fallback: last available close from historical dataset
         return float(fallback_price), "historical_close", True
 
     def regime_history(self) -> pd.Series:
@@ -306,53 +324,102 @@ class StockerPredictor:
         return {"dates": bh.index.tolist(), "buy_and_hold": bh.tolist()}
 
 
-def _fetch_latest_price_yahoo(ticker: str, fallback: float) -> float:
-    quote_url = "https://query1.finance.yahoo.com/v7/finance/quote"
-    resp = requests.get(quote_url, params={"symbols": ticker}, timeout=8)
-    resp.raise_for_status()
-    rows = resp.json().get("quoteResponse", {}).get("result", [])
-    if rows:
-        px = rows[0].get("regularMarketPrice") or rows[0].get("regularMarketPreviousClose")
-        if px:
-            return float(px)
+def _fetch_latest_price_yfinance(ticker: str) -> float | None:
+    """Fetch the latest market price using yfinance fast_info or 1d intraday data."""
+    import yfinance as yf
+    try:
+        t = yf.Ticker(ticker)
+        if hasattr(t, "fast_info") and t.fast_info is not None:
+            price = getattr(t.fast_info, "last_price", None)
+            if price is None and hasattr(t.fast_info, "get"):
+                price = t.fast_info.get("last_price") or t.fast_info.get("regularMarketPrice")
+            if price is not None and not np.isnan(price) and float(price) > 0:
+                return float(price)
+        
+        # Try intraday 1-day bar
+        df = t.history(period="1d", interval="1m", auto_adjust=True)
+        if df is not None and len(df) > 0 and "Close" in df.columns:
+            val = float(df["Close"].iloc[-1])
+            if val > 0:
+                return val
+    except Exception:
+        pass
+    return None
 
-    chart_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-    chart_resp = requests.get(chart_url, params={"range": "5d", "interval": "1d"}, timeout=8)
-    chart_resp.raise_for_status()
-    data = chart_resp.json().get("chart", {}).get("result", [])
-    if data:
-        closes = data[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
-        closes = [c for c in closes if c is not None]
-        if closes:
-            return float(closes[-1])
 
-    nse_px = _fetch_latest_price_nse(ticker)
-    if nse_px is not None:
-        return nse_px
+def _fetch_latest_price_yahoo_direct(ticker: str) -> float | None:
+    """Fetch live price directly from Yahoo Chart API with browser headers."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json,text/plain,*/*",
+    }
+    
+    # Try 1d intraday chart
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=1d&interval=1m"
+        resp = requests.get(url, headers=headers, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            result = data.get("chart", {}).get("result", [])
+            if result:
+                meta = result[0].get("meta", {})
+                price = meta.get("regularMarketPrice")
+                if price and float(price) > 0:
+                    return float(price)
+                indicators = result[0].get("indicators", {}).get("quote", [{}])[0]
+                closes = [c for c in indicators.get("close", []) if c is not None]
+                if closes and float(closes[-1]) > 0:
+                    return float(closes[-1])
+    except Exception:
+        pass
 
-    return fallback
+    # Try 5d daily chart
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=5d&interval=1d"
+        resp = requests.get(url, headers=headers, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            result = data.get("chart", {}).get("result", [])
+            if result:
+                meta = result[0].get("meta", {})
+                price = meta.get("regularMarketPrice")
+                if price and float(price) > 0:
+                    return float(price)
+                indicators = result[0].get("indicators", {}).get("quote", [{}])[0]
+                closes = [c for c in indicators.get("close", []) if c is not None]
+                if closes and float(closes[-1]) > 0:
+                    return float(closes[-1])
+    except Exception:
+        pass
+
+    return None
 
 
 def _fetch_latest_price_nse(ticker: str) -> float | None:
-    symbol = (ticker or "").upper().replace(".NS", "")
+    """Fetch live equity price directly from NSE India API."""
+    symbol = (ticker or "").upper().replace(".NS", "").replace(".BO", "")
     if not symbol:
         return None
 
     headers = {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json,text/plain,*/*",
         "Referer": "https://www.nseindia.com/",
     }
     session = requests.Session()
-    session.get("https://www.nseindia.com", headers=headers, timeout=8)
-    resp = session.get(
-        "https://www.nseindia.com/api/quote-equity",
-        params={"symbol": symbol},
-        headers=headers,
-        timeout=8,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    info = data.get("priceInfo", {})
-    px = info.get("lastPrice") or info.get("close")
-    return float(px) if px is not None else None
+    try:
+        session.get("https://www.nseindia.com", headers=headers, timeout=5)
+        resp = session.get(
+            f"https://www.nseindia.com/api/quote-equity?symbol={symbol}",
+            headers=headers,
+            timeout=6,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            info = data.get("priceInfo", {})
+            px = info.get("lastPrice") or info.get("close")
+            if px and float(px) > 0:
+                return float(px)
+    except Exception:
+        pass
+    return None

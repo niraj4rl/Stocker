@@ -16,21 +16,26 @@ cp .env.example .env
 
 Fill `.env` with your local credentials. Do not commit `.env`.
 
-## Run the app
+## Run the app (Single Command)
 
 ```bash
-uvicorn ui.app:app --reload
+python run.py
 ```
+*(Or simply double-click / run `run.bat` on Windows. This automatically launches the server and opens your browser to http://127.0.0.1:8000/app)*
 
-## Run backtest only
-
-```bash
-python -m backtest.engine --ticker RELIANCE.NS
-```
-
-## Run tests
+## CLI Predictions & Backtesting
 
 ```bash
+# Instant live prediction in terminal
+python run.py --mode live --ticker RELIANCE.NS
+
+# Fast single-fold backtest
+python run.py --mode fast --ticker RELIANCE.NS
+
+# Full 5-fold walk-forward backtest
+python run.py --mode full --ticker RELIANCE.NS
+
+# Run all unit tests
 python -m pytest tests/
 ```
 

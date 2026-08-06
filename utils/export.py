@@ -30,7 +30,7 @@ def export_model_comparison_csv(ticker: str = None, output_path: str = None) -> 
         "sharpe", "total_return", "max_drawdown", "calmar",
         "hit_rate", "profit_factor", "n_trades", "win_trades", "loss_trades",
         "mae", "rmse", "r2", "directional_accuracy",
-        "accuracy", "f1_score", "precision_score", "recall",
+        "accuracy", "f1_score", "precision", "precision_score", "recall",
         "train_samples", "val_samples", "timestamp",
     ]
     available_cols = [c for c in col_order if c in df.columns]

@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import difflib
 import requests
 
@@ -14,7 +14,12 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backtest.engine import run_backtest
-from backtest.predictor import StockerPredictor
+from backtest.predictor import (
+    StockerPredictor,
+    _fetch_latest_price_yfinance,
+    _fetch_latest_price_yahoo_direct,
+    _fetch_latest_price_nse,
+)
 from data.nse_stocks import ALL_NSE_TICKERS
 from data.source_validator import get_valid_tickers
 from models.model_scorecard import ScorecardStore
@@ -44,6 +49,7 @@ REGIME_COLORS = {
 
 class LivePredictionRequest(BaseModel):
     ticker: str = Field(..., examples=["RELIANCE.NS"])
+    force_refresh: bool = Field(default=False, description="Force re-fetch of latest market data from online providers")
 
 
 class BacktestRequest(BaseModel):
@@ -172,21 +178,63 @@ def get_tickers() -> dict:
     }
 
 
+@app.get("/api/live-price/{ticker}")
+def get_live_price(ticker: str) -> dict:
+    """Fast live price quote endpoint without running model inference."""
+    t = _normalize_ticker(ticker)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if (DATA_SOURCE or "").lower() == "upstox" and UPSTOX_ACCESS_TOKEN:
+        try:
+            from data.upstox_client import UpstoxDataClient
+            client = UpstoxDataClient(UPSTOX_ACCESS_TOKEN)
+            px = float(client.get_live_price(t))
+            if px > 0:
+                return {"ticker": t, "price": round(px, 2), "source": "upstox_ltp", "as_of": now_iso, "is_fallback": False}
+        except Exception:
+            pass
+
+    try:
+        yf_px = _fetch_latest_price_yfinance(t)
+        if yf_px is not None and yf_px > 0:
+            return {"ticker": t, "price": round(yf_px, 2), "source": "yfinance_live", "as_of": now_iso, "is_fallback": False}
+    except Exception:
+        pass
+
+    try:
+        yahoo_px = _fetch_latest_price_yahoo_direct(t)
+        if yahoo_px is not None and yahoo_px > 0:
+            return {"ticker": t, "price": round(yahoo_px, 2), "source": "yahoo_chart_live", "as_of": now_iso, "is_fallback": False}
+    except Exception:
+        pass
+
+    try:
+        nse_px = _fetch_latest_price_nse(t)
+        if nse_px is not None and nse_px > 0:
+            return {"ticker": t, "price": round(nse_px, 2), "source": "nse_quote", "as_of": now_iso, "is_fallback": False}
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail=f"Live price unavailable for {t}")
+
+
 @app.post("/api/live-prediction")
 def live_prediction(payload: LivePredictionRequest) -> dict:
     ticker = _normalize_ticker(payload.ticker)
     now = datetime.utcnow()
     cache_hit = False
     fitted_at = None
-    force_refresh = False
+    force_refresh = payload.force_refresh
 
     try:
         search_meta = _safe_log_search(query_text=ticker, endpoint="live_prediction", ticker=ticker)
-        force_refresh = bool(search_meta.get("force_refresh", False))
+        if search_meta.get("force_refresh"):
+            force_refresh = True
 
         cache_entry = _predictor_cache.get(ticker)
         if (
-            cache_entry
+            not force_refresh
+            and cache_entry
             and cache_entry.get("predictor") is not None
             and cache_entry.get("fitted_at") is not None
             and now - cache_entry["fitted_at"] < timedelta(minutes=PREDICTOR_REFRESH_MINUTES)
@@ -200,9 +248,7 @@ def live_prediction(payload: LivePredictionRequest) -> dict:
                 data_source=DATA_SOURCE,
                 access_token=UPSTOX_ACCESS_TOKEN,
             )
-            # Do not force remote market-data refresh here because provider outages
-            # can break live mode; refresh the in-memory model cache only.
-            predictor.fit(force_refresh=False)
+            predictor.fit(force_refresh=force_refresh)
             fitted_at = now
             _predictor_cache[ticker] = {
                 "predictor": predictor,

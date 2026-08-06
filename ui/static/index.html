@@ -60,8 +60,11 @@
 
       <div class="glass-card lg:col-span-3 p-5 animate-rise delay-2">
         <div id="livePanel" class="mode-panel">
-          <div class="flex flex-wrap gap-2 mb-4">
+          <div class="flex flex-wrap items-center gap-2 mb-4">
             <button id="runLive" class="btn-primary">Run Live Prediction</button>
+            <button id="forceRefreshBtn" class="btn-secondary" title="Force fetch latest live quotes and retrain on fresh market data">
+              Refresh Live Price
+            </button>
           </div>
           <div id="liveMetrics" class="grid md:grid-cols-4 gap-3"></div>
           <div class="mt-5 grid lg:grid-cols-3 gap-4">
