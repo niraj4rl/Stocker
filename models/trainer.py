@@ -132,12 +132,14 @@ class ModelTrainer:
             y_reg_tr, y_reg_val = y_reg[:-val_size], y_reg[-val_size:]
             y_cls_tr, y_cls_val = y_cls[:-val_size], y_cls[-val_size:]
             val_returns = regime_df["target_pct_return"].iloc[-val_size:].values
+            val_prices = regime_df["Close"].iloc[-val_size:].values
 
             # Train & evaluate ALL regression models
             reg_results = self._train_regression_all(
                 X_tr, y_reg_tr, X_val, y_reg_val,
                 ticker=ticker, run_id=run_id, fold=fold, regime=regime,
                 train_samples=len(X_tr), val_samples=val_size,
+                current_prices=val_prices,
             )
 
             # Train & evaluate ALL classification models
@@ -184,11 +186,12 @@ class ModelTrainer:
                     "feature_cols": feat_cols,
                 },
             }
-            print(f"[models] {regime} — reg sharpe={reg_sharpe:.3f}, cls sharpe={cls_sharpe:.3f}")
+            print(f"[models] {regime} - reg sharpe={reg_sharpe:.3f}, cls sharpe={cls_sharpe:.3f}")
         return self.registry
 
     def _train_regression_all(self, X_tr, y_tr, X_val, y_val, **meta):
         candidates = self._build_regression_candidates()
+        current_prices = meta.get("current_prices")
 
         results = []
         for name, model in candidates.items():
@@ -199,7 +202,7 @@ class ModelTrainer:
                 strategy_returns = signals * y_val
 
                 trading = compute_trading_metrics(strategy_returns)
-                reg_metrics = compute_regression_metrics(y_val, preds)
+                reg_metrics = compute_regression_metrics(y_val, preds, current_prices=current_prices)
 
                 sc = ModelScorecard(
                     ticker=meta.get("ticker", ""),
@@ -237,11 +240,17 @@ class ModelTrainer:
                     continue
                 model.fit(X_tr, y_cls_tr)
                 preds = model.predict(X_val)
+                
+                try:
+                    y_prob = model.predict_proba(X_val)
+                except Exception:
+                    y_prob = None
+
                 signals = _cls_label_to_signal(preds)
                 strategy_returns = signals * val_returns
 
                 trading = compute_trading_metrics(strategy_returns)
-                cls_metrics = compute_classification_metrics(y_cls_val, preds)
+                cls_metrics = compute_classification_metrics(y_cls_val, preds, y_prob=y_prob)
 
                 sc = ModelScorecard(
                     ticker=meta.get("ticker", ""),

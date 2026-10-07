@@ -237,7 +237,6 @@ async function runLivePrediction(forceRefresh = false) {
           <span class='text-[10px] px-1.5 py-0.5 rounded font-medium' style='background:${srcInfo.color}18;color:${srcInfo.color};border:1px solid ${srcInfo.color}44'>${srcInfo.label}</span>
         </div>
         <p class='text-lg font-semibold mt-1'>INR ${Number(result.current_price).toFixed(2)}</p>
-        <p class='text-[11px] text-ink/60 mt-0.5' title='Price is live. Historical features trained on closed daily candles.'>Live Quote • Daily candle: ${data.data_as_of_date || "-"}${data.stale_data_warning ? " (Delayed)" : ""}</p>
       </div>
     `;
 
@@ -285,6 +284,38 @@ async function runLivePrediction(forceRefresh = false) {
       { key: "pct_of_days", label: "Days %" },
     ];
     $("regimeStats").innerHTML = asTable(data.regime_stats || [], statsCols);
+
+    const month = result.one_month_forecast;
+    if (month && !month.error) {
+      const confidence = month.confidence === "validated" ? "Validated against recent holdout" : "Low confidence; holdout did not beat baseline";
+      const returnPct = Number(month.predicted_return_pct);
+      const returnClass = returnPct >= 0 ? "text-sage" : "text-rose";
+      $("monthForecast").innerHTML = `
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Expected return</p>
+            <p class="text-lg font-semibold ${returnClass}">${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(3)}%</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Target price</p>
+            <p class="text-lg font-semibold">INR ${Number(month.predicted_price).toFixed(2)}</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Confidence</p>
+            <p class="text-sm font-semibold mt-1">${confidence}</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Direction accuracy</p>
+            <p class="text-lg font-semibold">${Number(month.validation_directional_accuracy).toFixed(1)}%</p>
+          </div>
+        </div>
+        <p class="text-xs text-ink/60 mt-3">
+          Direct ${month.horizon_trading_days}-trading-day forecast · As of ${month.as_of || "latest available data"} ·
+          Validation MAE ${Number(month.validation_mae).toFixed(3)}% vs baseline ${Number(month.baseline_mae).toFixed(3)}%
+        </p>`;
+    } else {
+      $("monthForecast").textContent = month?.error || "One-month forecast unavailable.";
+    }
 
   } catch (err) {
     setStatus(err.message, true);
@@ -415,7 +446,16 @@ async function init() {
   bindEvents();
   switchMode("live");
   await loadTickers();
-  setStatus("Ready. Select a ticker and run a mode.");
+
+  const params = new URLSearchParams(window.location.search);
+  const tickerParam = params.get("ticker");
+  if (tickerParam) {
+    const cleanTicker = tickerParam.trim().toUpperCase();
+    $("tickerInput").value = cleanTicker;
+    await runLivePrediction(false);
+  } else {
+    setStatus("Ready. Select a ticker and run a mode.");
+  }
 }
 
 init();

@@ -4,6 +4,9 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 import difflib
 import requests
+import threading
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -20,7 +23,7 @@ from backtest.predictor import (
     _fetch_latest_price_yahoo_direct,
     _fetch_latest_price_nse,
 )
-from data.nse_stocks import ALL_NSE_TICKERS
+from data.nse_stocks import ALL_NSE_TICKERS, TICKER_ALIASES
 from data.source_validator import get_valid_tickers
 from models.model_scorecard import ScorecardStore
 from regime.detector import get_regime_stats
@@ -38,6 +41,8 @@ from utils.export import (
     export_regime_analysis_csv,
     get_statistical_comparison,
 )
+from data.robust_fetcher import fetch_ohlcv_robust
+from forecast import fast_screen_ticker
 
 
 REGIME_COLORS = {
@@ -65,13 +70,27 @@ app = FastAPI(title="stocker API", version="2.0.0")
 
 # Lightweight in-process cache to prevent retraining on every live request.
 _predictor_cache: dict[str, dict] = {}
+_ranking_jobs: dict[str, dict] = {}
+_ranking_lock = threading.Lock()
+_ranking_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="stock-ranking")
 _NSE_TICKER_SET = set(ALL_NSE_TICKERS)
+
 _NSE_BASE_TO_TICKER = {t.replace(".NS", ""): t for t in ALL_NSE_TICKERS}
+_NSE_BASE_TO_TICKER.update({
+    legacy.replace(".NS", ""): canonical
+    for legacy, canonical in TICKER_ALIASES.items()
+})
+
+
+
+
 
 # Filter to only tickers with working data sources
 print("[app] Validating data sources for NSE tickers...")
 _validation = get_valid_tickers(ALL_NSE_TICKERS)
 _VALID_TICKERS = _validation.get("valid", ALL_NSE_TICKERS)
+
+
 _INVALID_TICKERS = _validation.get("invalid", [])
 if _INVALID_TICKERS:
     print(f"[app] Warning: {len(_INVALID_TICKERS)} tickers have no reliable data source")
@@ -104,6 +123,7 @@ def _normalize_ticker(raw: str) -> str:
     if not t:
         return t
 
+    t = TICKER_ALIASES.get(t, t)
     if t in _NSE_TICKER_SET:
         return t
 
@@ -113,6 +133,7 @@ def _normalize_ticker(raw: str) -> str:
             return candidate
 
     base = t.replace(".NS", "")
+    base = TICKER_ALIASES.get(f"{base}.NS", f"{base}.NS").replace(".NS", "")
     if base in _NSE_BASE_TO_TICKER:
         return _NSE_BASE_TO_TICKER[base]
 
@@ -161,6 +182,12 @@ def dashboard() -> FileResponse:
     return FileResponse(static_dir / "index.html")
 
 
+@app.get("/rankings")
+def rankings_page() -> FileResponse:
+    """Serve the all-NSE predicted-return ranking page."""
+    return FileResponse(static_dir / "rankings.html")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -176,6 +203,108 @@ def get_tickers() -> dict:
         "quick_picks": quick_picks,
         "note": f"Showing {len(_VALID_TICKERS)} reliable tickers out of {len(ALL_NSE_TICKERS)} total.",
     }
+
+
+def _rank_one_ticker(ticker: str) -> dict:
+    """Run the fast validated screen; detailed model training is not needed per ticker."""
+    raw = fetch_ohlcv_robust(
+        ticker, period="2y", data_source=DATA_SOURCE, access_token=UPSTOX_ACCESS_TOKEN
+    )
+    forecast = fast_screen_ticker(raw)
+    current_price = float(raw["Close"].iloc[-1])
+    return {
+        "ticker": ticker,
+        "predicted_return_pct": forecast["predicted_return_pct"],
+        "predicted_price": forecast["one_month"]["predicted_price"],
+        "current_price": round(current_price, 2),
+        "current_price_source": "historical_close",
+        "current_price_is_fallback": True,
+        "regime": "screening",
+        "model": forecast["screen_model"],
+        "one_month_return_pct": forecast["one_month"]["predicted_return_pct"],
+        "one_month_predicted_price": forecast["one_month"]["predicted_price"],
+        "one_month_confidence": forecast["one_month"]["confidence"],
+        "validation_passed": forecast["screen_validation_passed"],
+    }
+
+
+def _run_ranking_job(job_id: str) -> None:
+    tickers = list(ALL_NSE_TICKERS)
+    with _ranking_lock:
+        _ranking_jobs[job_id]["status"] = "running"
+        _ranking_jobs[job_id]["total"] = len(tickers)
+
+    futures = {
+        _ranking_executor.submit(_rank_one_ticker, ticker): ticker
+        for ticker in tickers
+    }
+    for future in as_completed(futures):
+        ticker = futures[future]
+        try:
+            result = future.result()
+            with _ranking_lock:
+                _ranking_jobs[job_id]["results"].append(result)
+                _ranking_jobs[job_id]["results"].sort(
+                    key=lambda item: item["predicted_return_pct"], reverse=True
+                )
+        except Exception as exc:
+            with _ranking_lock:
+                _ranking_jobs[job_id]["errors"].append({
+                    "ticker": ticker,
+                    "error": str(exc),
+                })
+        finally:
+            with _ranking_lock:
+                _ranking_jobs[job_id]["completed"] += 1
+
+    with _ranking_lock:
+        _ranking_jobs[job_id]["status"] = "completed"
+
+
+@app.post("/api/rankings/start")
+def start_rankings() -> dict:
+    """Start an asynchronous scan of every ticker in the NSE universe."""
+    with _ranking_lock:
+        active = next(
+            (
+                job_id for job_id, job in _ranking_jobs.items()
+                if job["status"] in {"queued", "running"}
+            ),
+            None,
+        )
+        if active:
+            return {"job_id": active, "status": _ranking_jobs[active]["status"]}
+
+        job_id = uuid.uuid4().hex[:12]
+        _ranking_jobs[job_id] = {
+            "status": "queued",
+            "total": len(ALL_NSE_TICKERS),
+            "completed": 0,
+            "results": [],
+            "errors": [],
+        }
+
+    _ranking_executor.submit(_run_ranking_job, job_id)
+    return {"job_id": job_id, "status": "queued", "total": len(ALL_NSE_TICKERS)}
+
+
+@app.get("/api/rankings/{job_id}")
+def get_rankings(job_id: str) -> dict:
+    """Return ranking progress and the current top 50 results."""
+    with _ranking_lock:
+        job = _ranking_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Ranking job not found")
+        return {
+            "job_id": job_id,
+            "status": job["status"],
+            "total": job["total"],
+            "completed": job["completed"],
+            "successful": len(job["results"]),
+            "failed": len(job["errors"]),
+            "results": job["results"][:50],
+            "errors": job["errors"][-50:],
+        }
 
 
 @app.get("/api/live-price/{ticker}")

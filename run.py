@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-def open_browser_delayed(url: str, delay_seconds: float = 1.2):
+def open_browser_delayed(url: str, delay_seconds: float = 3.0):
     def _open():
         time.sleep(delay_seconds)
         try:
@@ -38,18 +38,18 @@ def start_ui(host: str = "127.0.0.1", port: int = 8000, reload: bool = True, ope
 
     url = f"http://{host}:{port}/app"
     print("\n" + "=" * 60)
-    print("  🚀 Stocker - Regime-Aware Stock Prediction System")
+    print("  Stocker - Regime-Aware Stock Prediction System")
     print("=" * 60)
-    print(f"  • Web UI Dashboard:  {url}")
-    print(f"  • Landing Page:      http://{host}:{port}/")
-    print(f"  • API Docs (Swagger): http://{host}:{port}/docs")
-    print(f"  • Server running on: http://{host}:{port}")
+    print(f"  * Web UI Dashboard:  {url}")
+    print(f"  * Landing Page:      http://{host}:{port}/")
+    print(f"  * API Docs (Swagger): http://{host}:{port}/docs")
+    print(f"  * Server running on: http://{host}:{port}")
     print("=" * 60 + "\n")
 
     if open_browser:
         open_browser_delayed(url, delay_seconds=1.2)
 
-    uvicorn.run("ui.app:app", host=host, port=port, reload=reload)
+    uvicorn.run("ui.app:app", host=host, port=port, reload=reload, app_dir=str(ROOT))
 
 
 def run_live_cli(ticker: str, force_refresh: bool = False):

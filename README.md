@@ -61,3 +61,7 @@ stocker/
 3. Detects current market regime: Bull / Bear / High-Volatility using HMM
 4. Routes prediction to the specialist model validated for that regime
 5. Outputs predicted price (regression) or direction + confidence (classification)
+
+Open `/rankings` from the web app to scan the full NSE ticker universe and rank
+the top 50 stocks by the next-period regression return forecast. The scan runs
+asynchronously because each ticker is fitted through the prediction pipeline.

@@ -14,7 +14,11 @@ EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 def export_model_comparison_csv(ticker: str = None, output_path: str = None) -> str:
     """Export all model scores as a CSV file (suitable for paper tables)."""
-    store = ScorecardStore()
+    try:
+        store = ScorecardStore()
+    except Exception as exc:
+        print(f"[export] Database unavailable: {exc}")
+        return ""
     scores = store.get_all_scores(ticker)
     store.close()
 
@@ -47,7 +51,11 @@ def export_model_comparison_csv(ticker: str = None, output_path: str = None) -> 
 
 def export_leaderboard_csv(ticker: str = None, output_path: str = None) -> str:
     """Export aggregated leaderboard as CSV."""
-    store = ScorecardStore()
+    try:
+        store = ScorecardStore()
+    except Exception as exc:
+        print(f"[export] Database unavailable: {exc}")
+        return ""
     leaderboard = store.get_leaderboard(ticker)
     store.close()
 
@@ -67,7 +75,11 @@ def export_leaderboard_csv(ticker: str = None, output_path: str = None) -> str:
 
 def export_regime_analysis_csv(ticker: str = None, output_path: str = None) -> str:
     """Export regime-wise model performance for paper analysis."""
-    store = ScorecardStore()
+    try:
+        store = ScorecardStore()
+    except Exception as exc:
+        print(f"[export] Database unavailable: {exc}")
+        return ""
     scores = store.get_all_scores(ticker)
     store.close()
 
@@ -103,7 +115,11 @@ def get_statistical_comparison(ticker: str = None) -> dict:
     """
     from scipy import stats
 
-    store = ScorecardStore()
+    try:
+        store = ScorecardStore()
+    except Exception as exc:
+        print(f"[export] Database unavailable: {exc}")
+        return {}
     scores = store.get_all_scores(ticker)
     store.close()
 

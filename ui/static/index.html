@@ -41,7 +41,13 @@
   <div class="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 relative z-10">
     <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 animate-rise">
       <div>
-        <h1 class="font-display text-4xl md:text-5xl leading-tight">stocker</h1>
+        <a href="/" class="font-display text-4xl md:text-5xl leading-tight hover:text-sky transition">stocker</a>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/app" class="px-4 py-2 text-sm font-medium text-ink bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-mist transition">
+          Stock Predictions
+        </a>
+        <a href="/rankings" class="btn-primary">Top 50 Rankings</a>
       </div>
     </header>
 
@@ -88,6 +94,10 @@
             <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-2">Regime Statistics (3Y)</p>
             <div id="regimeStats" class="overflow-x-auto"></div>
           </div>
+          <div class="mt-4 soft-card p-4">
+            <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-2">One-Month Forecast</p>
+            <div id="monthForecast" class="text-sm text-ink/80">Run a prediction to calculate the 21-trading-day forecast.</div>
+          </div>
         </div>
       </div>
 
@@ -96,6 +106,6 @@
     <div id="statusBar" class="glass-card p-4 text-sm text-ink/80 animate-rise delay-4">Ready.</div>
   </div>
 
-  <script src="/static/app.js?v=20260801_v3"></script>
+  <script src="/static/app.js?v=20261007_v4"></script>
 </body>
 </html>

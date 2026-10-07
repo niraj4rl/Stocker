@@ -159,11 +159,11 @@ def _load_master_from_cache() -> list[str]:
 def _fetch_master_symbols() -> list[str]:
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "text/csv,*/*",
             "Referer": "https://www.nseindia.com/",
         }
-        resp = requests.get(_NSE_MASTER_URL, headers=headers, timeout=10)
+        resp = requests.get(_NSE_MASTER_URL, headers=headers, timeout=2)
         resp.raise_for_status()
         text = resp.text
 
@@ -171,8 +171,7 @@ def _fetch_master_symbols() -> list[str]:
         _CACHE_PATH.write_text(text, encoding="utf-8")
 
         return _parse_master_symbols(text)
-    except Exception as exc:
-        print(f"[nse_stocks] NSE master fetch failed, using static lists: {exc}")
+    except Exception:
         return []
 
 
@@ -183,6 +182,12 @@ def _load_all_nse_symbols() -> list[str]:
     return _fetch_master_symbols()
 
 
+# Symbols that have changed on the exchange/data providers. Legacy names remain
+# accepted by the UI but are canonicalized before retrieval and ranking.
+TICKER_ALIASES = {
+    "ZOMATO.NS": "ETERNAL.NS",
+}
+
 # --- Combined & deduplicated list ---
 ALL_NSE_TICKERS = sorted(
     set(
@@ -191,7 +196,7 @@ ALL_NSE_TICKERS = sorted(
         + NIFTY_MIDCAP
         + NIFTY_SMALLCAP_OTHER
         + _load_all_nse_symbols()
-    )
+    ) - set(TICKER_ALIASES)
 )
 
 # Quick lookup set

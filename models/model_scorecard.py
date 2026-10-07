@@ -58,8 +58,10 @@ class ModelScorecard:
 
     # Regression metrics (filled for regression models)
     mae: Optional[float] = None
+    mse: Optional[float] = None
     rmse: Optional[float] = None
     r2: Optional[float] = None
+    mape: Optional[float] = None
     directional_accuracy: Optional[float] = None
 
     # Classification metrics (filled for classification models)
@@ -67,6 +69,8 @@ class ModelScorecard:
     f1_score: Optional[float] = None
     precision: Optional[float] = None
     recall: Optional[float] = None
+    roc_auc: Optional[float] = None
+    confusion_matrix: Optional[list] = None
 
     # Metadata
     train_samples: int = 0
@@ -115,6 +119,18 @@ class ScorecardStore:
         )
         self._conn = psycopg2.connect(self.db_url)
         self._create_tables()
+        self._migrate_tables()
+
+    def _migrate_tables(self):
+        # Adding new columns safely to existing schema
+        with self._conn.cursor() as cur:
+            for col, dtype in [("mse", "REAL"), ("mape", "REAL"), ("roc_auc", "REAL"), ("confusion_matrix", "TEXT")]:
+                try:
+                    cur.execute(f"ALTER TABLE stocker_records ADD COLUMN {col} {dtype}")
+                except Exception:
+                    self._conn.rollback()
+                else:
+                    self._conn.commit()
 
     def _create_tables(self):
         with self._conn.cursor() as cur:
@@ -140,13 +156,17 @@ class ScorecardStore:
                     win_trades INTEGER,
                     loss_trades INTEGER,
                     mae REAL,
+                    mse REAL,
                     rmse REAL,
                     r2 REAL,
+                    mape REAL,
                     directional_accuracy REAL,
                     accuracy REAL,
                     f1_score REAL,
                     precision_score REAL,
                     recall REAL,
+                    roc_auc REAL,
+                    confusion_matrix TEXT,
                     train_samples INTEGER,
                     val_samples INTEGER,
 
@@ -200,6 +220,7 @@ class ScorecardStore:
     def _scorecard_payload(self, sc: ModelScorecard) -> dict:
         d = sc.to_dict()
         d["is_winner"] = int(bool(d.get("is_winner", False)))
+        d["confusion_matrix"] = str(d.get("confusion_matrix")) if d.get("confusion_matrix") else None
         return d
 
     def log_scorecards(self, scorecards: list[ModelScorecard]):
@@ -214,8 +235,8 @@ class ScorecardStore:
                     unified_score,
                     sharpe, total_return, max_drawdown, calmar,
                     hit_rate, profit_factor, n_trades, win_trades, loss_trades,
-                    mae, rmse, r2, directional_accuracy,
-                    accuracy, f1_score, precision_score, recall,
+                    mae, mse, rmse, r2, mape, directional_accuracy,
+                    accuracy, f1_score, precision_score, recall, roc_auc, confusion_matrix,
                     train_samples, val_samples, timestamp
                 ) VALUES (
                     'model_score',
@@ -223,8 +244,8 @@ class ScorecardStore:
                     %(unified_score)s,
                     %(sharpe)s, %(total_return)s, %(max_drawdown)s, %(calmar)s,
                     %(hit_rate)s, %(profit_factor)s, %(n_trades)s, %(win_trades)s, %(loss_trades)s,
-                    %(mae)s, %(rmse)s, %(r2)s, %(directional_accuracy)s,
-                    %(accuracy)s, %(f1_score)s, %(precision)s, %(recall)s,
+                    %(mae)s, %(mse)s, %(rmse)s, %(r2)s, %(mape)s, %(directional_accuracy)s,
+                    %(accuracy)s, %(f1_score)s, %(precision)s, %(recall)s, %(roc_auc)s, %(confusion_matrix)s,
                     %(train_samples)s, %(val_samples)s, %(timestamp)s
                 )
             """, payload)

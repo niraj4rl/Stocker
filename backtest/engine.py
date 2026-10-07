@@ -70,7 +70,11 @@ def run_backtest(
         raise ValueError("profile must be 'fast' or 'full'")
 
     run_id = str(uuid.uuid4())[:8]
-    store = ScorecardStore()
+    try:
+        store = ScorecardStore()
+    except Exception as exc:
+        print(f"[backtest] Database is down, proceeding without persisting backtest scorecard: {exc}")
+        store = None
     model_io_records = []
     trainer = None
 
@@ -100,7 +104,7 @@ def run_backtest(
     fold_results = []
 
     for fold, train_df, test_df, train_end, test_end in splitter.split(df):
-        print(f"--- Fold {fold}: train to {train_end.date()}, test {test_df.index[0].date()}–{test_df.index[-1].date()} ---")
+        print(f"--- Fold {fold}: train to {train_end.date()}, test {test_df.index[0].date()}-{test_df.index[-1].date()} ---")
 
         detector = RegimeDetector()
         try:
@@ -304,14 +308,18 @@ def run_backtest(
     }
 
     # Log run metadata
-    store.log_run(
-        run_id=run_id,
-        ticker=ticker,
-        n_folds=len(fold_results),
-        start_date=fold_results[0]["test_start"] if fold_results else "",
-        end_date=fold_results[-1]["test_end"] if fold_results else "",
-    )
-    store.close()
+    if store is not None:
+        try:
+            store.log_run(
+                run_id=run_id,
+                ticker=ticker,
+                n_folds=len(fold_results),
+                start_date=fold_results[0]["test_start"] if fold_results else "",
+                end_date=fold_results[-1]["test_end"] if fold_results else "",
+            )
+            store.close()
+        except Exception as exc:
+            print(f"[backtest] Failed to log run metadata: {exc}")
 
     # Log model I/O records in bulk
     if model_io_records:

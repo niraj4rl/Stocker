@@ -59,6 +59,35 @@ class ModelIOStore:
             f"user={self.user} password={self.password} connect_timeout={self.connect_timeout}"
         )
         self._conn = psycopg2.connect(self.db_url)
+        self._create_tables()
+
+    def _create_tables(self):
+        with self._conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS stocker_model_io (
+                    id SERIAL PRIMARY KEY,
+                    run_id TEXT,
+                    ticker TEXT NOT NULL,
+                    regime TEXT,
+                    paradigm TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
+                    context TEXT NOT NULL,
+                    input_payload JSONB NOT NULL,
+                    output_payload JSONB NOT NULL,
+                    actual_price REAL,
+                    predicted_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_stocker_model_io_ticker_ts
+                ON stocker_model_io (ticker, predicted_at DESC)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_stocker_model_io_run_id
+                ON stocker_model_io (run_id)
+            """)
+        self._conn.commit()
 
     def log_io(self, record: ModelIORecord):
         """Insert a single ModelIORecord."""

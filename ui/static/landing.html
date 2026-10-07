@@ -185,10 +185,9 @@
       <a href="/app" class="btn-nav-primary">
         <span>Stock Predictions</span>
       </a>
-      <button onclick="showNiftyNotice()" class="btn-nav-secondary">
-        <span>Nifty 50 Prediction</span>
-        <span class="badge-soon">Soon</span>
-      </button>
+      <a href="/rankings" class="btn-nav-secondary">
+        <span>Top 50 Rankings</span>
+      </a>
     </div>
   </nav>
 
@@ -303,12 +302,6 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
-  </script>
-
-  <script>
-    function showNiftyNotice() {
-      alert('Nifty 50 Prediction module is currently under active development.');
-    }
   </script>
 
 </body>

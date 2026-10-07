@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from utils.config import DATA_DIR, MIN_DATA_ROWS, MAX_STALE_DAYS
+from data.nse_stocks import TICKER_ALIASES
 
 
 class RobustNSEFetcher:
@@ -45,6 +46,7 @@ class RobustNSEFetcher:
         Fetches fresh data if cache is missing, stale (>1 day old), or force_refresh is requested.
         Gracefully falls back to existing cache if offline.
         """
+        ticker = TICKER_ALIASES.get(ticker.upper(), ticker.upper())
         cache_path = self.cache_dir / f"{ticker.replace('.', '_')}.parquet"
         cached_df: Optional[pd.DataFrame] = None
         is_cache_fresh = False

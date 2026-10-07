@@ -24,6 +24,7 @@ from utils.config import (
     REGIME_HIGHVOL,
 )
 from utils.metrics import compute_all_metrics
+from forecast import forecast_horizon, MONTH_TRADING_DAYS
 from dateutil.relativedelta import relativedelta
 
 
@@ -154,6 +155,17 @@ class StockerPredictor:
             "model_validation_sharpe": None,
         }
 
+        try:
+            result["one_month_forecast"] = forecast_horizon(
+                self.df, horizon=MONTH_TRADING_DAYS
+            )
+        except ValueError as exc:
+            result["one_month_forecast"] = {
+                "confidence": "unavailable",
+                "error": str(exc),
+                "horizon_trading_days": MONTH_TRADING_DAYS,
+            }
+
         if model is None or feat_cols is None:
             result["error"] = "No model available for current regime"
             return result
@@ -253,12 +265,13 @@ class StockerPredictor:
                     input_payload=input_payload,
                     output_payload=output_payload,
                     regime=regime,
-                    actual_price=None,
+                    actual_price=float(result.get("current_price")) if result.get("current_price") else None,
                     predicted_at=datetime.now().isoformat()
                 )
                 io_store = ModelIOStore()
                 io_store.log_io(record)
                 io_store.close()
+                print(f"[predictor] Logged model I/O to database for {self.ticker} ({model_name} in {regime}).")
             except Exception as exc:
                 print(f"[predictor] Failed to log live prediction I/O: {exc}")
 

@@ -13,7 +13,6 @@ const ScrollHero = ({
   sections = [
     { id: 'hero', headline: 'stocker', subheadline: 'we stalk stocks for you', body: 'Regime-aware adaptive stock market predictions & intelligence' },
     { id: 'about', headline: 'Adaptive Models', subheadline: 'Regime Intelligence', body: 'Dynamically switching between Classification and Regression based on market volatility' },
-    { id: 'nifty', headline: 'Nifty 50', subheadline: 'Coming Soon', body: 'Deep index forecasting & intraday momentum predictions' },
     { id: 'contact', headline: 'Connect', subheadline: 'Create Together', body: 'Empowering algorithmic decision making' }
   ],
   colorPalette = {
@@ -24,7 +23,7 @@ const ScrollHero = ({
     dark: '#0a0a0a'
   },
   logo = 'stocker',
-  menuItems = ['Stock Predictions', 'Nifty 50 Prediction']
+  menuItems = ['Stock Predictions']
 }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);

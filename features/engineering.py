@@ -13,7 +13,6 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = _add_rolling_stats(df)
     df = _add_temporal(df)
     df = _add_target(df)
-    df = _shift_features(df)
     df = df.dropna()
     return df
 
@@ -72,12 +71,6 @@ def _add_temporal(df: pd.DataFrame) -> pd.DataFrame:
 def _add_target(df: pd.DataFrame) -> pd.DataFrame:
     df["target_pct_return"] = df["pct_return"].shift(-1)
     df["target_price"] = df["Close"].shift(-1)
-    return df
-
-
-def _shift_features(df: pd.DataFrame) -> pd.DataFrame:
-    feature_cols = get_feature_cols(df)
-    df[feature_cols] = df[feature_cols].shift(1)
     return df
 
 
