@@ -26,11 +26,13 @@ def make_ohlcv(n=420):
 
 
 def test_month_forecast_has_validated_schema():
-    result = forecast_horizon(make_ohlcv(), MONTH_TRADING_DAYS)
+    data = make_ohlcv()
+    result = forecast_horizon(data, MONTH_TRADING_DAYS)
     assert result["horizon_trading_days"] == 21
     assert isinstance(result["predicted_return_pct"], float)
     assert result["validation_samples"] >= 30
     assert result["confidence"] in {"validated", "low"}
+    assert result["as_of"] == str(data.index[-1].date())
 
 
 def test_forecast_rejects_short_history():

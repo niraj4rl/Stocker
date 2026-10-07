@@ -46,7 +46,7 @@ function render(data) {
   $("errors").innerHTML = errors.length ? errors.join("") : "None.";
   $("status").textContent =
     data.status === "completed"
-      ? "Scan completed. Results are sorted by predicted return, highest first."
+      ? `Scan completed. Results are sorted by next-trading-day return, highest first. Forecast data as of ${data.results?.[0]?.forecast_as_of || "latest available candle"}.`
       : "Scan in progress. Results update as tickers finish.";
 }
 

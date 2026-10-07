@@ -15,14 +15,6 @@ MONTH_TRADING_DAYS = 21
 MIN_FORECAST_ROWS = 180
 
 
-def _prepare_horizon_frame(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
-    if horizon < 1:
-        raise ValueError("horizon must be at least one trading day")
-    features = build_features(df)
-    features["forecast_target"] = features["Close"].shift(-horizon) / features["Close"] - 1.0
-    return features.dropna(subset=["forecast_target"])
-
-
 def forecast_horizon(
     df: pd.DataFrame,
     horizon: int = MONTH_TRADING_DAYS,
@@ -34,7 +26,12 @@ def forecast_horizon(
     ``horizon`` future trading observations. Validation is chronological and
     compared with a zero-return baseline.
     """
-    frame = _prepare_horizon_frame(df, horizon)
+    if horizon < 1:
+        raise ValueError("horizon must be at least one trading day")
+    feature_frame = build_features(df, include_targets=False)
+    frame = feature_frame.copy()
+    frame["forecast_target"] = frame["Close"].shift(-horizon) / frame["Close"] - 1.0
+    frame = frame.dropna(subset=["forecast_target"])
     feature_cols = get_feature_cols(frame)
     if len(frame) < min_rows:
         raise ValueError(
@@ -59,7 +56,7 @@ def forecast_horizon(
     baseline_mae = float(np.mean(np.abs(y_val)))
     direction = float(np.mean(np.sign(y_val) == np.sign(val_pred)) * 100)
 
-    latest = frame.iloc[-1]
+    latest = feature_frame.iloc[-1]
     latest_features = latest[feature_cols].to_frame().T
     predicted_return = float(model.predict(latest_features)[0])
     # Keep extreme extrapolations bounded by the observed training target range.
@@ -81,7 +78,7 @@ def forecast_horizon(
         "validation_samples": int(len(y_val)),
         "validation_passed": bool(validation_passed),
         "confidence": "validated" if validation_passed else "low",
-        "as_of": str(frame.index[-1].date()),
+        "as_of": str(pd.Timestamp(latest.name).date()),
     }
 
 

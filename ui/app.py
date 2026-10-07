@@ -224,6 +224,8 @@ def _rank_one_ticker(ticker: str) -> dict:
         "one_month_return_pct": forecast["one_month"]["predicted_return_pct"],
         "one_month_predicted_price": forecast["one_month"]["predicted_price"],
         "one_month_confidence": forecast["one_month"]["confidence"],
+        "one_month_validation_passed": forecast["one_month"]["validation_passed"],
+        "forecast_as_of": forecast["one_month"]["as_of"],
         "validation_passed": forecast["screen_validation_passed"],
     }
 

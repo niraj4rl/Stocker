@@ -3,7 +3,8 @@ import numpy as np
 from utils.config import LAG_FEATURES, ROLLING_WINDOW
 
 
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
+def build_features(df: pd.DataFrame, include_targets: bool = True) -> pd.DataFrame:
+    """Build technical features, optionally including supervised targets."""
     df = df.copy()
 
     df = _add_rsi(df)
@@ -12,7 +13,8 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = _add_lags(df)
     df = _add_rolling_stats(df)
     df = _add_temporal(df)
-    df = _add_target(df)
+    if include_targets:
+        df = _add_target(df)
     df = df.dropna()
     return df
 
@@ -78,7 +80,7 @@ def get_feature_cols(df: pd.DataFrame) -> list:
     exclude = {
         "Open", "High", "Low", "Close", "Volume",
         "pct_return", "log_return",
-        "target_pct_return", "target_price",
+        "target_pct_return", "target_price", "forecast_target",
         "regime",
     }
     return [c for c in df.columns if c not in exclude]
