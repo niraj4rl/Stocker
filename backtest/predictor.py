@@ -323,21 +323,13 @@ class StockerPredictor:
         historical_price: float,
         current_price: float,
     ) -> None:
-        """Express forecast prices from the live quote while keeping returns fixed."""
+        """Rebase the headline target to the live quote without breaking the chart."""
         if historical_price <= 0 or current_price <= 0:
             return
         scale = current_price / historical_price
         forecast["predicted_price"] = round(
             float(forecast["predicted_price"]) * scale, 2
         )
-        curve = forecast.get("curve")
-        if not curve:
-            return
-        curve["current_price"] = round(current_price, 2)
-        for point in curve.get("points", []):
-            for key in ("predicted_price", "lower_price", "upper_price"):
-                if key in point:
-                    point[key] = round(float(point[key]) * scale, 2)
 
     def _fetch_live_price(self, fallback_price: float) -> tuple[float, str, bool]:
         """

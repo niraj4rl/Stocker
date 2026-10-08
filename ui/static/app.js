@@ -134,19 +134,22 @@ function renderMonthForecastChart(curve) {
     ...history.map((point) => Number(point.close)),
     ...curve.points.map(() => null),
   ];
+  const historyLastClose = history.length
+    ? Number(history[history.length - 1].close)
+    : Number(curve.current_price);
   const forecastValues = [
     ...history.slice(0, -1).map(() => null),
-    Number(curve.current_price),
+    historyLastClose,
     ...curve.points.map((point) => Number(point.predicted_price)),
   ];
   const lowerValues = [
     ...history.slice(0, -1).map(() => null),
-    Number(curve.points[0].lower_price),
+    historyLastClose,
     ...curve.points.map((point) => Number(point.lower_price)),
   ];
   const upperValues = [
     ...history.slice(0, -1).map(() => null),
-    Number(curve.points[0].upper_price),
+    historyLastClose,
     ...curve.points.map((point) => Number(point.upper_price)),
   ];
 
