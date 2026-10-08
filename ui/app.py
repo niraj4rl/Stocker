@@ -6,6 +6,7 @@ import difflib
 import requests
 import threading
 import uuid
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -207,14 +208,27 @@ def get_tickers() -> dict:
 
 def _rank_one_ticker(ticker: str) -> dict:
     """Run the fast validated screen; detailed model training is not needed per ticker."""
-    raw = fetch_ohlcv_robust(
-        ticker, period="2y", data_source=DATA_SOURCE, access_token=UPSTOX_ACCESS_TOKEN
-    )
-    forecast = fast_screen_ticker(raw)
+    last_error = None
+    for attempt in range(3):
+        try:
+            raw = fetch_ohlcv_robust(
+                ticker, period="2y", data_source=DATA_SOURCE, access_token=UPSTOX_ACCESS_TOKEN
+            )
+            forecast = fast_screen_ticker(raw)
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+    else:
+        raise ValueError(f"{ticker}: data could not be loaded after 3 attempts ({last_error})")
     current_price = float(raw["Close"].iloc[-1])
     return {
         "ticker": ticker,
+        # Keep the one-day value in the API for consumers that already use it,
+        # but rank the page by the explicit one-month forecast below.
         "predicted_return_pct": forecast["predicted_return_pct"],
+        "one_day_return_pct": forecast["predicted_return_pct"],
         "predicted_price": forecast["one_month"]["predicted_price"],
         "current_price": round(current_price, 2),
         "current_price_source": "historical_close",
@@ -230,8 +244,27 @@ def _rank_one_ticker(ticker: str) -> dict:
     }
 
 
+def _ranking_universe() -> list[str]:
+    """Return the complete NSE universe; each symbol is fetched during scanning."""
+    return list(ALL_NSE_TICKERS)
+
+
+def _ranking_sort_key(item: dict) -> tuple:
+    """Sort by monthly return, preferring validated forecasts on ties."""
+    monthly_return = item.get("one_month_return_pct")
+    validation_passed = item.get("one_month_validation_passed", False)
+    if monthly_return is None:
+        return (0, 0.0, 0, "")
+    return (
+        1,
+        float(monthly_return),
+        1 if validation_passed else 0,
+        str(item.get("ticker", "")),
+    )
+
+
 def _run_ranking_job(job_id: str) -> None:
-    tickers = list(ALL_NSE_TICKERS)
+    tickers = _ranking_universe()
     with _ranking_lock:
         _ranking_jobs[job_id]["status"] = "running"
         _ranking_jobs[job_id]["total"] = len(tickers)
@@ -247,7 +280,7 @@ def _run_ranking_job(job_id: str) -> None:
             with _ranking_lock:
                 _ranking_jobs[job_id]["results"].append(result)
                 _ranking_jobs[job_id]["results"].sort(
-                    key=lambda item: item["predicted_return_pct"], reverse=True
+                    key=_ranking_sort_key, reverse=True
                 )
         except Exception as exc:
             with _ranking_lock:
@@ -265,7 +298,8 @@ def _run_ranking_job(job_id: str) -> None:
 
 @app.post("/api/rankings/start")
 def start_rankings() -> dict:
-    """Start an asynchronous scan of every ticker in the NSE universe."""
+    """Start an asynchronous scan of every NSE symbol."""
+    ranking_total = len(_ranking_universe())
     with _ranking_lock:
         active = next(
             (
@@ -280,19 +314,27 @@ def start_rankings() -> dict:
         job_id = uuid.uuid4().hex[:12]
         _ranking_jobs[job_id] = {
             "status": "queued",
-            "total": len(ALL_NSE_TICKERS),
+            "total": ranking_total,
+            "universe_total": len(ALL_NSE_TICKERS),
+            "excluded_unavailable": 0,
             "completed": 0,
             "results": [],
             "errors": [],
         }
 
     _ranking_executor.submit(_run_ranking_job, job_id)
-    return {"job_id": job_id, "status": "queued", "total": len(ALL_NSE_TICKERS)}
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "total": ranking_total,
+        "universe_total": len(ALL_NSE_TICKERS),
+        "excluded_unavailable": 0,
+    }
 
 
 @app.get("/api/rankings/{job_id}")
 def get_rankings(job_id: str) -> dict:
-    """Return ranking progress and the current top 50 results."""
+    """Return ranking progress and the current top 50 one-month forecasts."""
     with _ranking_lock:
         job = _ranking_jobs.get(job_id)
         if job is None:
@@ -301,10 +343,15 @@ def get_rankings(job_id: str) -> dict:
             "job_id": job_id,
             "status": job["status"],
             "total": job["total"],
+            "universe_total": job.get("universe_total", job["total"]),
+            "excluded_unavailable": job.get("excluded_unavailable", 0),
             "completed": job["completed"],
             "successful": len(job["results"]),
             "failed": len(job["errors"]),
-            "results": job["results"][:50],
+            "results": [
+                {**item, "rank": index + 1}
+                for index, item in enumerate(job["results"][:50])
+            ],
             "errors": job["errors"][-50:],
         }
 

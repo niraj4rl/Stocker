@@ -3,109 +3,87 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>stocker</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>stocker · Predict</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            mist: "#f5f7fa",
-            paper: "#ffffff",
-            ink: "#111827",
-            sage: "#16A34A",
-            rose: "#DC2626",
-            apricot: "#F59E0B",
-            lavender: "#6B7280",
-            sky: "#2563EB"
-          },
-          fontFamily: {
-            display: ["Fraunces", "serif"],
-            body: ["Manrope", "sans-serif"]
-          },
-          boxShadow: {
-            soft: "0 10px 26px rgba(15, 23, 42, 0.06)"
-          }
-        }
-      }
-    }
-  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=20260801_v2" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=20261008_v3" />
 </head>
-<body class="font-body text-ink bg-mist min-h-screen">
-  <div class="background-glow"></div>
-  <div class="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 relative z-10">
-    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 animate-rise">
-      <div>
-        <a href="/" class="font-display text-4xl md:text-5xl leading-tight hover:text-sky transition">stocker</a>
-      </div>
-      <div class="flex items-center gap-3">
-        <a href="/app" class="px-4 py-2 text-sm font-medium text-ink bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-mist transition">
-          Stock Predictions
-        </a>
-        <a href="/rankings" class="btn-primary">Top 50 Rankings</a>
-      </div>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <a class="wordmark" href="/">stocker</a>
+      <nav class="site-nav">
+        <a class="active" href="/app">Predict</a>
+        <a href="/rankings">Rankings</a>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">◐</button>
+      </nav>
     </header>
-
-    <section class="grid lg:grid-cols-4 gap-5 mb-6">
-      <div class="glass-card lg:col-span-1 p-5 animate-rise delay-1">
-        <label class="text-xs uppercase tracking-[0.15em] text-ink/70">Ticker</label>
-        <input id="tickerInput" list="tickerList" class="input mt-2" placeholder="RELIANCE.NS" />
-        <datalist id="tickerList"></datalist>
-
-        <div class="mt-4">
-          <p class="text-xs uppercase tracking-[0.15em] text-ink/70 mb-2">Quick Picks</p>
-          <div id="quickPicks" class="grid grid-cols-2 gap-2"></div>
+    <main>
+      <section class="page-intro">
+        <p class="eyebrow">Stock outlook</p>
+        <h1>Find your next view.</h1>
+        <div class="search-row" style="margin-top:24px">
+          <input id="tickerInput" list="tickerList" class="input mono" placeholder="Search by stock name or symbol" aria-label="Choose a stock" />
+          <datalist id="tickerList"></datalist>
+          <button id="runLive" class="btn-primary">Predict</button>
+          <button id="forceRefreshBtn" class="btn-secondary" title="Get the latest available price">Refresh</button>
         </div>
-
-      </div>
-
-      <div class="glass-card lg:col-span-3 p-5 animate-rise delay-2">
-        <div id="livePanel" class="mode-panel">
-          <div class="flex flex-wrap items-center gap-2 mb-4">
-            <button id="runLive" class="btn-primary">Run Live Prediction</button>
-            <button id="forceRefreshBtn" class="btn-secondary" title="Force fetch latest live quotes and retrain on fresh market data">
-              Refresh Live Price
-            </button>
+        <div id="quickPicks" class="quick-picks"></div>
+      </section>
+      <div id="statusBar" class="status-line">Ready.</div>
+      <section id="livePanel">
+        <div class="stock-header" style="margin-top:24px">
+          <div>
+            <h2 class="stock-symbol" id="stockTitle">Selected stock</h2>
+            <div class="stock-meta"><i class="live-dot"></i>Live price · latest available</div>
+            <div class="stock-price mono" id="stockPrice"><span class="skeleton" style="display:block;width:230px;height:52px"></span></div>
+            <div class="stock-change" id="stockChange"><span class="skeleton" style="display:block;width:120px"></span></div>
           </div>
-          <div id="liveMetrics" class="grid md:grid-cols-4 gap-3"></div>
-          <div class="mt-5 grid lg:grid-cols-3 gap-4">
-            <div class="soft-card p-4">
-              <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-2">Signal</p>
-              <div id="signalBadge"></div>
-              <p id="predictionText" class="mt-3 text-sm text-ink/80"></p>
-              <div class="mt-4">
-                <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-1">Routing Table</p>
-                <div id="routingTable" class="space-y-1 text-sm"></div>
-              </div>
-            </div>
-            <div class="soft-card p-4 lg:col-span-2">
-              <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-2">Price & Regime (1Y)</p>
-              <div class="chart-container">
-                <canvas id="liveChart"></canvas>
-              </div>
+          <div class="verdict-panel">
+            <div id="signalBadge" class="verdict"></div>
+            <div class="label" style="margin-top:8px">1-month outlook</div>
+            <div class="verdict-meta">
+              <div><div class="label">Expected return</div><div id="verdictReturn" class="value">—</div></div>
+              <div><div class="label">Target price</div><div id="verdictTarget" class="value">—</div></div>
             </div>
           </div>
-          <div class="mt-4 soft-card p-4">
-            <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-2">Regime Statistics (3Y)</p>
-            <div id="regimeStats" class="overflow-x-auto"></div>
-          </div>
-          <div class="mt-4 soft-card p-4">
-            <p class="text-xs uppercase tracking-[0.15em] text-ink/60 mb-2">One-Month Forecast</p>
-            <div id="monthForecast" class="text-sm text-ink/80">Run a prediction to calculate the 21-trading-day forecast.</div>
-          </div>
         </div>
-      </div>
-
-    </section>
-
-    <div id="statusBar" class="glass-card p-4 text-sm text-ink/80 animate-rise delay-4">Ready.</div>
+        <div id="liveMetrics" class="metrics">
+          <div class="metric"><div class="skeleton"></div><div class="skeleton" style="margin-top:16px;width:55%"></div></div>
+          <div class="metric"><div class="skeleton"></div><div class="skeleton" style="margin-top:16px;width:55%"></div></div>
+          <div class="metric"><div class="skeleton"></div><div class="skeleton" style="margin-top:16px;width:55%"></div></div>
+          <div class="metric"><div class="skeleton"></div><div class="skeleton" style="margin-top:16px;width:55%"></div></div>
+        </div>
+        <div class="outlook-grid">
+          <section class="section">
+            <h2 class="section-title">Today’s view</h2>
+            <p id="predictionText" class="details-copy"></p>
+            <div id="routingTable" class="hidden" aria-hidden="true"></div>
+          </section>
+          <section class="section chart-card">
+            <div class="section-title-row">
+              <h2 class="section-title">Price movement</h2>
+              <div class="chart-legend"><span><i class="legend-dot"></i>History</span><span><i class="legend-dot forecast"></i>Outlook</span></div>
+            </div>
+            <div class="chart-container"><canvas id="liveChart"></canvas></div>
+          </section>
+        </div>
+        <div class="detail-grid">
+          <section class="section market-conditions-section">
+            <h2 class="section-title">Market conditions</h2>
+            <div id="regimeStats" class="table-wrap"></div>
+          </section>
+        </div>
+        <section class="section forecast-section">
+          <h2 class="section-title">Next month</h2>
+          <div id="monthForecast" class="details-copy">Choose a stock to see its possible path over the next month.</div>
+        </section>
+      </section>
+    </main>
   </div>
-
-  <script src="/static/app.js?v=20261007_v4"></script>
+  <script src="/static/app.js?v=20261008_v7"></script>
+  <script src="/static/theme.js?v=20261008_v2"></script>
 </body>
 </html>

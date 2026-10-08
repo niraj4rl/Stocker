@@ -1,17 +1,25 @@
 const state = {
   mode: "live",
   liveChart: null,
+  monthForecastChart: null,
   equityChart: null,
   tickers: [],
 };
 
 const signalColors = {
   Buy: "#16A34A",
-  Hold: "#6B7280",
+  Hold: "#F59E0B",
   Sell: "#DC2626",
 };
 
 const $ = (id) => document.getElementById(id);
+const formatINR = (value) => new Intl.NumberFormat("en-IN", {
+  style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2,
+}).format(Number(value));
+const signedPercent = (value, digits = 2) => {
+  const number = Number(value);
+  return `${number >= 0 ? "+" : ""}${number.toFixed(digits)}%`;
+};
 
 function setStatus(msg, isError = false) {
   const bar = $("statusBar");
@@ -58,7 +66,10 @@ function asTable(rows, columns) {
           if (typeof value === "number") {
             return `<td>${value.toFixed(3)}</td>`;
           }
-          return `<td>${String(value)}</td>`;
+          const regimeClass = col.key === "regime"
+            ? ` class="regime-${String(value).toLowerCase().replaceAll(" ", "").replaceAll("_", "")}"`
+            : "";
+          return `<td${regimeClass}>${String(value)}</td>`;
         })
         .join("");
       return `<tr>${tds}</tr>`;
@@ -76,6 +87,9 @@ function renderLiveChart(points) {
 
   const labels = points.map((p) => p.date);
   const close = points.map((p) => p.close);
+  const area = ctx.createLinearGradient(0, 0, 0, 340);
+  area.addColorStop(0, "rgba(34, 197, 94, 0.18)");
+  area.addColorStop(1, "rgba(34, 197, 94, 0)");
 
   state.liveChart = new Chart(ctx, {
     type: "line",
@@ -85,8 +99,10 @@ function renderLiveChart(points) {
         {
           label: "Close",
           data: close,
-          borderColor: "#2563EB",
-          borderWidth: 2,
+          borderColor: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#b7791f",
+          borderWidth: 1.5,
+          backgroundColor: area,
+          fill: true,
           pointRadius: 0,
           tension: 0.25,
         },
@@ -98,9 +114,98 @@ function renderLiveChart(points) {
       plugins: {
         legend: { display: false },
       },
+      scales: { x: { display: false }, y: { grid: { color: "rgba(128,128,128,0.16)" } } },
+    },
+  });
+}
+
+function renderMonthForecastChart(curve) {
+  const canvas = $("monthForecastChart");
+  if (!canvas || !curve || !curve.points?.length) return;
+  const ctx = canvas.getContext("2d");
+  if (state.monthForecastChart) state.monthForecastChart.destroy();
+
+  const history = curve.historical_points || [];
+  const labels = [
+    ...history.map((point) => point.date),
+    ...curve.points.map((point) => point.date),
+  ];
+  const actualValues = [
+    ...history.map((point) => Number(point.close)),
+    ...curve.points.map(() => null),
+  ];
+  const forecastValues = [
+    ...history.slice(0, -1).map(() => null),
+    Number(curve.current_price),
+    ...curve.points.map((point) => Number(point.predicted_price)),
+  ];
+  const lowerValues = [
+    ...history.slice(0, -1).map(() => null),
+    Number(curve.points[0].lower_price),
+    ...curve.points.map((point) => Number(point.lower_price)),
+  ];
+  const upperValues = [
+    ...history.slice(0, -1).map(() => null),
+    Number(curve.points[0].upper_price),
+    ...curve.points.map((point) => Number(point.upper_price)),
+  ];
+
+  state.monthForecastChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Actual close",
+          data: actualValues,
+          borderColor: getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#6b706b",
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.2,
+        },
+        {
+          label: "Forecasted price",
+          data: forecastValues,
+          borderColor: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#b7791f",
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: (context) => context.dataIndex === history.length - 1 ? 4 : 2,
+          tension: 0.2,
+        },
+        {
+          label: "Validation-error range",
+          data: upperValues,
+          borderColor: "transparent",
+          backgroundColor: "rgba(128, 128, 128, 0.10)",
+          pointRadius: 0,
+          borderWidth: 1,
+          fill: "-1",
+          tension: 0.2,
+        },
+        {
+          label: "Validation-error lower bound",
+          data: lowerValues,
+          borderColor: "transparent",
+          pointRadius: 0,
+          borderWidth: 1,
+          tension: 0.2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => `INR ${Number(context.raw).toFixed(2)}`,
+          },
+        },
+      },
       scales: {
-        x: { display: false },
-        y: { grid: { color: "rgba(209,213,219,0.5)" } },
+        x: { title: { display: false }, grid: { display: false } },
+        y: { title: { display: false }, grid: { color: "rgba(128,128,128,0.16)" } },
       },
     },
   });
@@ -230,20 +335,12 @@ async function runLivePrediction(forceRefresh = false) {
       color: "#2563EB",
     };
 
-    const priceCardHtml = `
-      <div class='soft-card p-3'>
-        <div class='flex items-center justify-between'>
-          <p class='text-xs uppercase tracking-[0.1em] text-ink/60'>Current Price</p>
-          <span class='text-[10px] px-1.5 py-0.5 rounded font-medium' style='background:${srcInfo.color}18;color:${srcInfo.color};border:1px solid ${srcInfo.color}44'>${srcInfo.label}</span>
-        </div>
-        <p class='text-lg font-semibold mt-1'>INR ${Number(result.current_price).toFixed(2)}</p>
-      </div>
-    `;
+    const priceCardHtml = `<div class='metric'><div class='metric-label'>Current price</div><div class='metric-value'>${formatINR(result.current_price)}</div></div>`;
 
     const otherMetrics = [
-      { label: "Regime", value: result.regime },
+      { label: "Market mood", value: result.regime },
       { label: "Strategy", value: result.paradigm },
-      { label: "ML Model", value: result.ml_model || "XGBoost" },
+      { label: "Method used", value: result.ml_model || "Price history" },
     ];
 
     $("liveMetrics").innerHTML =
@@ -251,20 +348,23 @@ async function runLivePrediction(forceRefresh = false) {
       otherMetrics
         .map(
           (m) =>
-            `<div class='soft-card p-3'><p class='text-xs uppercase tracking-[0.1em] text-ink/60'>${m.label}</p><p class='text-lg font-semibold mt-1'>${m.value}</p></div>`
+            `<div class='metric'><div class='metric-label'>${m.label}</div><div class='metric-value'>${m.value}</div></div>`
         )
         .join("");
 
-    const signalColor = signalColors[result.signal] || "#6B7280";
-    $("signalBadge").innerHTML = `<span class='badge' style='background:${signalColor}22;color:${signalColor};border:1px solid ${signalColor}66'>${result.signal}</span>`;
+    const signalColor = signalColors[result.signal] || "#B7791F";
+    document.documentElement.style.setProperty("--accent", signalColor);
+    $("stockTitle").textContent = result.ticker || payload.ticker;
+    $("stockPrice").textContent = formatINR(result.current_price);
+    $("signalBadge").innerHTML = `<span class='verdict'><i class='verdict-dot'></i>${result.signal || "Hold"}</span>`;
 
     if (result.paradigm === "regression") {
       const ret = Number(result.predicted_return_pct || 0);
       const nextPrice = result.predicted_price ? Number(result.predicted_price).toFixed(2) : "-";
-      $("predictionText").textContent = `Predicted return: ${ret > 0 ? "+" : ""}${ret.toFixed(3)}% | Target close: INR ${nextPrice}`;
+      $("predictionText").textContent = `Possible next-day move ${signedPercent(ret, 3)} · target ${formatINR(nextPrice)}`;
     } else {
       const conf = result.confidence !== null && result.confidence !== undefined ? `${result.confidence}%` : "N/A";
-      $("predictionText").textContent = `Direction: ${result.prediction || "-"} | Confidence: ${conf}`;
+      $("predictionText").textContent = `Direction: ${result.prediction || "-"} · confidence ${conf}`;
     }
 
     const routing = Object.entries(result.routing_table || {})
@@ -278,41 +378,69 @@ async function runLivePrediction(forceRefresh = false) {
     renderLiveChart((data.chart && data.chart.points) || []);
 
     const statsCols = [
-      { key: "regime", label: "Regime" },
-      { key: "mean_daily_return", label: "Mean Daily Return %" },
-      { key: "mean_vol_ann", label: "Annual Vol %" },
-      { key: "pct_of_days", label: "Days %" },
+      { key: "regime", label: "Condition" },
+      { key: "mean_daily_return", label: "Avg daily return" },
+      { key: "mean_vol_ann", label: "Volatility" },
+      { key: "pct_of_days", label: "% of days" },
     ];
-    $("regimeStats").innerHTML = asTable(data.regime_stats || [], statsCols);
+    const regimeLabels = { Bull: "Bull", Bear: "Bear", HighVol: "High Vol" };
+    const regimeStatsByName = Object.fromEntries((data.regime_stats || []).map((row) => [row.regime, row]));
+    const regimeRows = ["Bull", "Bear", "HighVol"].map((name) => ({
+      ...(regimeStatsByName[name] || { count: 0, pct_of_days: 0, mean_daily_return: 0, mean_vol_ann: 0 }),
+      regime: regimeLabels[name],
+    }));
+    const regimeCountTotal = regimeRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+    if (regimeCountTotal > 0) {
+      let roundedTotal = 0;
+      regimeRows.forEach((row, index) => {
+        if (index === regimeRows.length - 1) {
+          row.pct_of_days = Number((100 - roundedTotal).toFixed(1));
+        } else {
+          row.pct_of_days = Number(((Number(row.count || 0) / regimeCountTotal) * 100).toFixed(1));
+          roundedTotal += row.pct_of_days;
+        }
+      });
+    }
+    $("regimeStats").innerHTML =
+      asTable(regimeRows, statsCols) +
+      "<p class='regime-total'>Total share of days: <strong>100.0%</strong></p>";
 
     const month = result.one_month_forecast;
     if (month && !month.error) {
-      const confidence = month.confidence === "validated" ? "Validated against recent holdout" : "Low confidence; holdout did not beat baseline";
       const returnPct = Number(month.predicted_return_pct);
       const returnClass = returnPct >= 0 ? "text-sage" : "text-rose";
+      $("verdictReturn").textContent = signedPercent(returnPct, 2);
+      $("verdictTarget").textContent = formatINR(month.predicted_price);
+      const dayReturn = Number(result.predicted_return_pct || 0);
+      $("stockChange").textContent = `Next-day view ${signedPercent(dayReturn, 2)}`;
+      $("stockChange").className = `stock-change ${dayReturn >= 0 ? "gain" : "loss"}`;
+      $("liveMetrics").innerHTML = [
+        `<div class="metric"><div class="metric-label">Expected return</div><div class="metric-value ${returnClass}">${signedPercent(returnPct, 2)}</div></div>`,
+        `<div class="metric"><div class="metric-label">Target price</div><div class="metric-value">${formatINR(month.predicted_price)}</div></div>`,
+        `<div class="metric"><div class="metric-label">Model used</div><div class="metric-value model-name">${result.ml_model || "Price history"}</div></div>`,
+        `<div class="metric"><div class="metric-label">Market regime</div><div class="metric-value">${regimeLabels[result.regime] || result.regime || "Neutral"}</div></div>`,
+      ].join("");
       $("monthForecast").innerHTML = `
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="forecast-stats">
           <div>
-            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Expected return</p>
-            <p class="text-lg font-semibold ${returnClass}">${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(3)}%</p>
+            <p class="label">Expected return</p>
+            <p class="metric-value ${returnClass}">${signedPercent(returnPct, 3)}</p>
           </div>
           <div>
-            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Target price</p>
-            <p class="text-lg font-semibold">INR ${Number(month.predicted_price).toFixed(2)}</p>
-          </div>
-          <div>
-            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Confidence</p>
-            <p class="text-sm font-semibold mt-1">${confidence}</p>
-          </div>
-          <div>
-            <p class="text-xs uppercase tracking-[0.1em] text-ink/60">Direction accuracy</p>
-            <p class="text-lg font-semibold">${Number(month.validation_directional_accuracy).toFixed(1)}%</p>
+            <p class="label">Target price</p>
+            <p class="metric-value">${formatINR(month.predicted_price)}</p>
           </div>
         </div>
-        <p class="text-xs text-ink/60 mt-3">
-          Direct ${month.horizon_trading_days}-trading-day forecast · As of ${month.as_of || "latest available data"} ·
-          Validation MAE ${Number(month.validation_mae).toFixed(3)}% vs baseline ${Number(month.baseline_mae).toFixed(3)}%
+        <p class="forecast-meta">
+          Based on recent price movement · Updated ${month.as_of || "recently"}
+        </p>
+        <div class="chart-container">
+          <canvas id="monthForecastChart"></canvas>
+        </div>
+        <p class="forecast-meta">
+          Recent prices are grey. The dashed line is the possible path; the light band shows a range of past outcomes.
         </p>`;
+      renderMonthForecastChart(month.curve);
     } else {
       $("monthForecast").textContent = month?.error || "One-month forecast unavailable.";
     }
@@ -454,7 +582,7 @@ async function init() {
     $("tickerInput").value = cleanTicker;
     await runLivePrediction(false);
   } else {
-    setStatus("Ready. Select a ticker and run a mode.");
+    await runLivePrediction(false);
   }
 }
 

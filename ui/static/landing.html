@@ -1,308 +1,75 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>stocker — we stalk stocks for you</title>
-  
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>stocker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,400&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <style>
-    :root {
-      --bg: #ffffff;
-      --bg-alt: #f5f7fa;
-      --fg: #111827;
-      --muted: #6b7280;
-      --blue: #2563eb;
-      --blue-hover: #1d4ed8;
-      --border: #e5e7eb;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body {
-      height: 100%;
-      background: radial-gradient(circle at 50% 46%, #ffffff 0%, #f5f7fa 68%);
-      color: var(--fg);
-      font-family: 'Manrope', sans-serif;
-      overflow: hidden;
-    }
-
-    .background-glow {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background: radial-gradient(circle at 72% 74%, rgba(37, 99, 235, 0.08), transparent 36%);
-      z-index: 0;
-    }
-
-    #surface {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
-    }
-
-    #surface canvas {
-      width: 100% !important;
-      height: 100% !important;
-      display: block;
-    }
-
-    /* Fixed Navigation Header */
-    nav.nav-header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      z-index: 100;
-      padding: 1.75rem 2.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .nav-brand {
-      font-family: 'Fraunces', serif;
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: var(--fg);
-      text-decoration: none;
-      letter-spacing: -0.02em;
-    }
-
-    .nav-buttons {
-      display: flex;
-      align-items: center;
-      gap: 0.85rem;
-    }
-
-    .btn-nav-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      text-decoration: none;
-      background: var(--blue);
-      color: #ffffff;
-      font-weight: 600;
-      font-size: 0.9rem;
-      padding: 0.65rem 1.3rem;
-      border-radius: 12px;
-      border: 1px solid #1d4ed8;
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2);
-      transition: all 0.22s ease;
-    }
-
-    .btn-nav-primary:hover {
-      background: var(--blue-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
-    }
-
-    .btn-nav-secondary {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      text-decoration: none;
-      background: rgba(255, 255, 255, 0.9);
-      color: var(--fg);
-      font-weight: 600;
-      font-size: 0.9rem;
-      padding: 0.65rem 1.3rem;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
-      transition: all 0.22s ease;
-      cursor: pointer;
-      backdrop-filter: blur(4px);
-    }
-
-    .btn-nav-secondary:hover {
-      background: #ffffff;
-      border-color: #d1d5db;
-      transform: translateY(-1px);
-    }
-
-    .badge-soon {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 0.15rem 0.45rem;
-      background: #f59e0b1f;
-      color: #b45309;
-      border: 1px solid #f59e0b40;
-      font-weight: 700;
-      border-radius: 999px;
-    }
-
-    /* Minimal Hero Container */
-    .hero-container {
-      position: relative;
-      z-index: 10;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 2rem;
-      transform: translateY(-2vh);
-    }
-
-    .hero-title {
-      font-family: 'Fraunces', serif;
-      font-size: clamp(3.8rem, 9vw, 7rem);
-      font-weight: 700;
-      color: #111827;
-      letter-spacing: -0.03em;
-      line-height: 1;
-      margin-bottom: 1.25rem;
-    }
-
-    .hero-subtitle {
-      font-size: clamp(1.15rem, 2.2vw, 1.65rem);
-      font-weight: 400;
-      color: #6b7280;
-      letter-spacing: 0.03em;
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=20261008_v3" />
 </head>
-<body>
-
-  <div class="background-glow"></div>
-  <div id="surface"></div>
-
-  <!-- Top Right Navigation Buttons -->
-  <nav class="nav-header">
-    <a href="/" class="nav-brand">stocker</a>
-    <div class="nav-buttons">
-      <a href="/app" class="btn-nav-primary">
-        <span>Stock Predictions</span>
-      </a>
-      <a href="/rankings" class="btn-nav-secondary">
-        <span>Top 50 Rankings</span>
-      </a>
+<body class="landing-page">
+  <header class="site-header app-shell">
+    <a class="wordmark" href="/">stocker</a>
+    <nav class="site-nav">
+      <a href="/app">Predict</a><a href="/rankings">Rankings</a>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">◐</button>
+    </nav>
+  </header>
+  <main class="landing-main">
+    <div class="landing-copy">
+      <p class="eyebrow">NSE · 2,600+ stocks tracked</p>
+      <h1>Know where a stock is heading before you decide.</h1>
+      <p class="landing-lede">Explore recent price movement and a clear view of what the next month may look like.</p>
+      <form class="landing-search search-row" id="landingSearch">
+        <span aria-hidden="true" style="padding-left:8px;color:var(--muted)">⌕</span>
+        <input class="input mono" id="landingTicker" list="landingTickerList" placeholder="Search a stock" aria-label="Search for a stock" />
+        <datalist id="landingTickerList"></datalist>
+        <button class="btn-primary" type="submit">Predict</button>
+      </form>
+      <div id="landingPopular" class="quick-picks"></div>
+      <p style="margin-top:18px"><a class="landing-link" href="/rankings">View rankings →</a></p>
     </div>
-  </nav>
-
-  <!-- Whole Landing Page Content: Minimal Title + Subtitle -->
-  <main class="hero-container">
-    <h1 class="hero-title">stocker</h1>
-    <p class="hero-subtitle">we stalk stocks for you</p>
+    <div id="landingPreview" class="landing-preview hidden">
+      <div class="preview-head"><div><div id="previewTicker" class="mono">—</div><div class="label">Live price</div></div><div id="previewChange" class="mono">—</div></div>
+      <div id="previewPrice" class="preview-price">—</div>
+      <div class="preview-chart chart-container"><canvas id="previewChart"></canvas></div>
+    </div>
   </main>
-
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
-
-    const container = document.getElementById('surface');
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xf5f7fa, 1400, 4800);
-
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 10000);
-    camera.position.set(0, 380, 1150);
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0);
-    container.appendChild(renderer.domElement);
-
-    const SEPARATION = 75;
-    const AMOUNT_X = 48;
-    const AMOUNT_Y = 65;
-    const numParticles = AMOUNT_X * AMOUNT_Y;
-
-    const positions = new Float32Array(numParticles * 3);
-    const colors = new Float32Array(numParticles * 3);
-
-    // Dark grey color palette (ranging from dark slate grey to heavy dark grey)
-    const darkGreyTop = new THREE.Color(0x6b7280); // Dark slate grey (#6b7280)
-    const darkGreyMid = new THREE.Color(0x374151); // Deep dark grey (#374151)
-    const darkGreyBot = new THREE.Color(0x1f2937); // Heavy dark grey (#1f2937)
-
-    let i = 0;
-    for (let x = 0; x < AMOUNT_X; x++) {
-      for (let y = 0; y < AMOUNT_Y; y++) {
-        positions[i * 3 + 0] = x * SEPARATION - (AMOUNT_X * SEPARATION) / 2;
-        positions[i * 3 + 1] = 0;
-        positions[i * 3 + 2] = y * SEPARATION - (AMOUNT_Y * SEPARATION) / 2 + 500;
-
-        // y goes from 0 (middle/top) to 65 (bottom)
-        // Transition from dark grey top to heavy dark grey bottom
-        const progressY = y / (AMOUNT_Y - 1);
-        const c = darkGreyTop.clone().lerp(progressY > 0.5 ? darkGreyBot : darkGreyMid, Math.pow(progressY, 1.2));
-
-        colors[i * 3 + 0] = c.r;
-        colors[i * 3 + 1] = c.g;
-        colors[i * 3 + 2] = c.b;
-
-        i++;
-      }
+  <section class="market-strip hidden" id="marketStrip"><div class="strip-items" id="marketStripItems"></div></section>
+  <section class="app-shell" style="padding-bottom:24px">
+    <div class="section-title">How it works</div>
+    <div class="metrics" style="margin-top:0;grid-template-columns:repeat(3,1fr)">
+      <div class="metric"><div class="metric-label">01 · Data</div><div class="metric-value" style="font-size:16px">We read recent market history.</div></div>
+      <div class="metric"><div class="metric-label">02 · Model</div><div class="metric-value" style="font-size:16px">We compare the patterns.</div></div>
+      <div class="metric"><div class="metric-label">03 · Outlook</div><div class="metric-value" style="font-size:16px">You get a clear next step.</div></div>
+    </div>
+  </section>
+  <script>
+    const landingTicker = document.getElementById("landingTicker");
+    const landingList = document.getElementById("landingTickerList");
+    const strip = document.getElementById("marketStrip");
+    const stripItems = document.getElementById("marketStripItems");
+    const popular = document.getElementById("landingPopular");
+    const fmt = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(n);
+    async function loadLandingData() {
+      try {
+        const data = await fetch("/api/tickers").then((r) => r.json());
+        (data.tickers || []).slice(0, 80).forEach((ticker) => { const option = document.createElement("option"); option.value = ticker; landingList.appendChild(option); });
+        const picks = (data.quick_picks || []).slice(0, 6);
+        const quotes = await Promise.all(picks.map(async (ticker) => { try { return await fetch(`/api/live-price/${encodeURIComponent(ticker)}`).then((r) => r.ok ? r.json() : null); } catch (_) { return null; } }));
+        const usable = quotes.filter(Boolean);
+        if (!usable.length) return;
+        popular.innerHTML = usable.map((q) => `<button type="button" data-ticker="${q.ticker}">${q.ticker.replace(".NS", "")} <span class="gain">${fmt(q.price)}</span></button>`).join("");
+        popular.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => { landingTicker.value = button.dataset.ticker; }));
+        stripItems.innerHTML = usable.map((q) => `<span class="strip-item"><strong class="mono">${q.ticker.replace(".NS", "")}</strong><span class="mono">${fmt(q.price)}</span><small>live price</small></span>`).join("");
+        strip.classList.remove("hidden");
+      } catch (_) { /* Optional live elements stay hidden when data is unavailable. */ }
     }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const material = new THREE.PointsMaterial({
-      size: 9.0,
-      vertexColors: true,
-      transparent: true,
-      opacity: 1.0,
-      sizeAttenuation: true
-    });
-
-    const points = new THREE.Points(geometry, material);
-    scene.add(points);
-
-    let mouseX = 0;
-    let mouseY = 0;
-    window.addEventListener('mousemove', (e) => {
-      mouseX = (e.clientX - window.innerWidth / 2) * 0.12;
-      mouseY = (e.clientY - window.innerHeight / 2) * 0.12;
-    });
-
-    let tick = 0;
-    function animate() {
-      requestAnimationFrame(animate);
-
-      camera.position.x += (mouseX - camera.position.x) * 0.05;
-      camera.position.y += (-mouseY + 380 - camera.position.y) * 0.05;
-      camera.lookAt(0, 0, 0);
-
-      const posAttr = geometry.attributes.position;
-      const posArray = posAttr.array;
-      let ptr = 0;
-
-      for (let x = 0; x < AMOUNT_X; x++) {
-        for (let y = 0; y < AMOUNT_Y; y++) {
-          const idx = ptr * 3;
-          posArray[idx + 1] =
-            Math.sin((x + tick) * 0.25) * 48 +
-            Math.sin((y + tick) * 0.42) * 48;
-          ptr++;
-        }
-      }
-
-      posAttr.needsUpdate = true;
-      renderer.render(scene, camera);
-      tick += 0.06;
-    }
-    animate();
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    document.getElementById("landingSearch").addEventListener("submit", (event) => { event.preventDefault(); const value = landingTicker.value.trim().toUpperCase(); if (value) window.location.href = `/app?ticker=${encodeURIComponent(value)}`; });
+    loadLandingData();
   </script>
-
+  <script src="/static/theme.js?v=20261008_v2"></script>
 </body>
 </html>

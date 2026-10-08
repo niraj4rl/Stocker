@@ -6,7 +6,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forecast import MONTH_TRADING_DAYS, forecast_horizon
+from forecast import MONTH_TRADING_DAYS, fast_screen_ticker, forecast_curve, forecast_horizon
+from features.engineering import build_features, get_feature_cols
 
 
 def make_ohlcv(n=420):
@@ -42,3 +43,42 @@ def test_forecast_rejects_short_history():
         assert "Insufficient history" in str(exc)
     else:
         raise AssertionError("short history should be rejected")
+
+
+def test_fast_screen_returns_both_ranking_horizons():
+    result = fast_screen_ticker(make_ohlcv())
+
+    assert result["screen_model"] == "validated Ridge"
+    assert isinstance(result["predicted_return_pct"], float)
+    assert result["one_month"]["horizon_trading_days"] == MONTH_TRADING_DAYS
+    assert isinstance(result["one_month"]["predicted_return_pct"], float)
+    assert result["one_month"]["as_of"] == str(make_ohlcv().index[-1].date())
+
+
+def test_forecast_curve_has_direct_daily_points():
+    result = forecast_curve(make_ohlcv(), MONTH_TRADING_DAYS)
+
+    assert result["horizon_trading_days"] == MONTH_TRADING_DAYS
+    assert len(result["points"]) == MONTH_TRADING_DAYS
+    assert result["points"][0]["trading_day"] == 1
+    assert result["points"][-1]["trading_day"] == MONTH_TRADING_DAYS
+    assert all("predicted_price" in point for point in result["points"])
+    assert len(result["historical_points"]) == 30
+    assert all(point["lower_price"] <= point["predicted_price"] <= point["upper_price"] for point in result["points"])
+
+
+def test_features_are_scale_invariant():
+    data = make_ohlcv()
+    scaled = data.copy()
+    for column in ("Open", "High", "Low", "Close"):
+        scaled[column] *= 10
+
+    original_features = build_features(data)
+    scaled_features = build_features(scaled)
+    columns = get_feature_cols(original_features)
+    np.testing.assert_allclose(
+        original_features.iloc[-1][columns].to_numpy(dtype=float),
+        scaled_features.iloc[-1][columns].to_numpy(dtype=float),
+        rtol=1e-9,
+        atol=1e-9,
+    )

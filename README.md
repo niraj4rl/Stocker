@@ -63,7 +63,7 @@ stocker/
 5. Outputs predicted price (regression) or direction + confidence (classification)
 
 Open `/rankings` from the web app to scan the full NSE ticker universe and rank
-the top 50 stocks by the next-period regression return forecast. The scan runs
-asynchronously using a lightweight validated Ridge screen. Each result also
-includes a direct 21-trading-day forecast, validation confidence, and the
-historical candle date used as the forecast origin.
+the top 50 stocks by the direct 21-trading-day regression return forecast. The
+scan runs asynchronously using a lightweight validated Ridge screen. Each
+result also includes the next-day estimate for context, validation confidence,
+and the historical candle date used as the forecast origin.

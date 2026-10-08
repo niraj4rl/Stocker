@@ -15,6 +15,7 @@ import xgboost as xgb
 from utils.config import (
     REGIME_BULL, REGIME_BEAR, REGIME_HIGHVOL, REGIME_LABELS,
     PARADIGM_REGRESSION, PARADIGM_CLASSIFICATION,
+    SIGNAL_DEADBAND, TRANSACTION_COST_BPS, SLIPPAGE_BPS,
 )
 from utils.metrics import (
     sharpe_ratio, compute_regression_metrics, compute_classification_metrics,
@@ -24,6 +25,18 @@ from features.engineering import get_feature_cols, build_classification_target
 from models.model_scorecard import ModelScorecard, ScorecardStore
 from sklearn.base import BaseEstimator, ClassifierMixin
 import uuid
+
+
+def _cost_aware_strategy_returns(signals: np.ndarray, realized_returns: np.ndarray) -> np.ndarray:
+    """Apply a deadband and turnover costs to validation strategy returns."""
+    positions = np.where(
+        signals > SIGNAL_DEADBAND,
+        1.0,
+        np.where(signals < -SIGNAL_DEADBAND, -1.0, 0.0),
+    )
+    turnover = np.abs(np.diff(np.r_[0.0, positions]))
+    cost_rate = (TRANSACTION_COST_BPS + SLIPPAGE_BPS) / 10000.0
+    return positions * realized_returns - turnover * cost_rate
 
 
 class EncodedXGBClassifier(BaseEstimator, ClassifierMixin):
@@ -111,6 +124,9 @@ class ModelTrainer:
         self.registry = {}
         df_train = df_train.copy()
         df_train["regime"] = regime_labels.reindex(df_train.index)
+        # Build labels before regime filtering so volatility thresholds retain
+        # their true chronological context.
+        df_train["classification_target"] = build_classification_target(df_train)
 
         if not run_id:
             run_id = str(uuid.uuid4())[:8]
@@ -125,7 +141,7 @@ class ModelTrainer:
             feat_cols = get_feature_cols(regime_df)
             X = regime_df[feat_cols].values
             y_reg = regime_df["target_pct_return"].values
-            y_cls = build_classification_target(regime_df).values
+            y_cls = regime_df["classification_target"].values
 
             val_size = max(int(len(regime_df) * 0.2), 20)
             X_tr, X_val = X[:-val_size], X[-val_size:]
@@ -198,8 +214,7 @@ class ModelTrainer:
             try:
                 model.fit(X_tr, y_tr)
                 preds = model.predict(X_val)
-                signals = np.sign(preds)
-                strategy_returns = signals * y_val
+                strategy_returns = _cost_aware_strategy_returns(preds, y_val)
 
                 trading = compute_trading_metrics(strategy_returns)
                 reg_metrics = compute_regression_metrics(y_val, preds, current_prices=current_prices)
@@ -247,7 +262,7 @@ class ModelTrainer:
                     y_prob = None
 
                 signals = _cls_label_to_signal(preds)
-                strategy_returns = signals * val_returns
+                strategy_returns = _cost_aware_strategy_returns(signals, val_returns)
 
                 trading = compute_trading_metrics(strategy_returns)
                 cls_metrics = compute_classification_metrics(y_cls_val, preds, y_prob=y_prob)

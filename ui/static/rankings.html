@@ -3,62 +3,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>stocker · NSE rankings</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=20260801_v2" />
+  <title>stocker · Rankings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=20261008_v3" />
 </head>
-<body class="font-body text-ink bg-mist min-h-screen">
-  <div class="background-glow"></div>
-  <main class="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 relative z-10">
-    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 animate-rise">
-      <div>
-        <a href="/" class="font-display text-4xl md:text-5xl leading-tight hover:text-sky transition">stocker</a>
-        <p class="text-sm text-ink/70 mt-2">All-NSE predicted return rankings</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <a href="/app" class="btn-secondary">Stock Predictions</a>
-        <button id="startScan" class="btn-primary">Scan all NSE stocks</button>
-      </div>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <a class="wordmark" href="/">stocker</a>
+      <nav class="site-nav">
+        <a href="/app">Predict</a>
+        <a class="active" href="/rankings">Rankings</a>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">◐</button>
+      </nav>
     </header>
-
-    <section class="glass-card p-5 animate-rise delay-1">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 class="font-display text-3xl">Top 50 predicted returns</h1>
-          <p class="text-sm text-ink/70 mt-1">
-            Fast, direct forecasts for the next trading day, with a separate 21-trading-day outlook.
-            Prices use the latest available historical close while scanning.
-          </p>
+    <main>
+      <section class="page-intro">
+        <p class="eyebrow">NSE stocks</p>
+        <div class="section-title-row"><h1>Top picks</h1><div id="progress" class="mono" style="color:var(--muted);font-size:12px">Ready to scan.</div></div>
+        <p>Stocks with the strongest possible movement over the next month.</p>
+      </section>
+      <section class="ranking-card section">
+        <div class="progress-track"><i id="scanProgressBar"></i></div>
+        <div class="ranking-head">
+          <div class="ranking-tools" style="margin-top:0">
+            <input id="rankingFilter" class="input filter-input" placeholder="Search ticker" aria-label="Filter stocks" />
+            <label class="toggle"><input id="positiveOnly" type="checkbox" /> Positive only</label>
+            <button id="startScan" class="btn-primary">Scan stocks</button>
+          </div>
+          <div id="status" class="status-line">No scan running.</div>
         </div>
-        <div id="progress" class="text-sm text-ink/70">Ready to scan.</div>
-      </div>
-      <div id="status" class="soft-card p-3 mt-4 text-sm">No scan running.</div>
-      <div class="overflow-x-auto mt-5">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Ticker</th>
-              <th>Predicted return</th>
-              <th>1-month return</th>
-              <th>1-month target price</th>
-              <th>Current price</th>
-              <th>Regime</th>
-              <th>Model</th>
-              <th>Quote source</th>
-            </tr>
-          </thead>
-          <tbody id="rankingRows">
-            <tr><td colspan="9">Start a scan to calculate rankings.</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <details class="mt-5">
-        <summary class="cursor-pointer text-sm font-semibold">Failed tickers</summary>
-        <div id="errors" class="text-sm text-ink/70 mt-3">None.</div>
-      </details>
-    </section>
-  </main>
-  <script src="/static/rankings.js?v=20261007_v1"></script>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr>
+              <th>#</th><th>Ticker</th><th>1-month return</th><th>Next-day</th><th>Target</th><th>Price</th>
+            </tr></thead>
+            <tbody id="rankingRows"><tr><td colspan="6" class="empty">Start a scan to see the list.</td></tr></tbody>
+          </table>
+        </div>
+        <details class="details">
+          <summary>Stocks we could not check</summary>
+          <div id="errors" class="details-content">None.</div>
+        </details>
+      </section>
+    </main>
+  </div>
+  <script src="/static/rankings.js?v=20261008_v3"></script>
+  <script src="/static/theme.js?v=20261008_v2"></script>
 </body>
 </html>

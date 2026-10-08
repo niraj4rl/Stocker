@@ -33,7 +33,10 @@ def _add_rsi(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
 def _add_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
     ema_fast = df["Close"].ewm(span=fast, adjust=False).mean()
     ema_slow = df["Close"].ewm(span=slow, adjust=False).mean()
-    df["macd"] = ema_fast - ema_slow
+    # Use scale-free momentum features so a model cannot learn the stock's
+    # nominal price level instead of its behavior.
+    close = df["Close"].replace(0, np.nan)
+    df["macd"] = (ema_fast - ema_slow) / close
     df["macd_signal"] = df["macd"].ewm(span=signal, adjust=False).mean()
     df["macd_hist"] = df["macd"] - df["macd_signal"]
     return df
@@ -51,13 +54,17 @@ def _add_bollinger(df: pd.DataFrame, period: int = 20, std_mult: float = 2.0) ->
 
 def _add_lags(df: pd.DataFrame) -> pd.DataFrame:
     for i in range(1, LAG_FEATURES + 1):
-        df[f"close_lag_{i}"] = df["Close"].shift(i)
+        df[f"close_lag_{i}"] = df["Close"] / df["Close"].shift(i) - 1.0
     return df
 
 
 def _add_rolling_stats(df: pd.DataFrame) -> pd.DataFrame:
-    df[f"rolling_mean_{ROLLING_WINDOW}"] = df["Close"].rolling(ROLLING_WINDOW).mean()
-    df[f"rolling_std_{ROLLING_WINDOW}"] = df["Close"].rolling(ROLLING_WINDOW).std()
+    rolling_close = df["Close"].rolling(ROLLING_WINDOW)
+    rolling_mean = rolling_close.mean()
+    df[f"rolling_mean_{ROLLING_WINDOW}"] = df["Close"] / rolling_mean.replace(0, np.nan) - 1.0
+    df[f"rolling_std_{ROLLING_WINDOW}"] = (
+        rolling_close.std() / df["Close"].replace(0, np.nan)
+    )
     df["volume_ma_10"] = df["Volume"].rolling(10).mean()
     df["volume_ratio"] = df["Volume"] / df["volume_ma_10"].replace(0, np.nan)
     return df
@@ -81,7 +88,7 @@ def get_feature_cols(df: pd.DataFrame) -> list:
         "Open", "High", "Low", "Close", "Volume",
         "pct_return", "log_return",
         "target_pct_return", "target_price", "forecast_target",
-        "regime",
+        "classification_target", "regime",
     }
     return [c for c in df.columns if c not in exclude]
 

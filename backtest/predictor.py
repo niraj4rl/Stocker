@@ -24,7 +24,7 @@ from utils.config import (
     REGIME_HIGHVOL,
 )
 from utils.metrics import compute_all_metrics
-from forecast import forecast_horizon, MONTH_TRADING_DAYS
+from forecast import forecast_curve, forecast_horizon, MONTH_TRADING_DAYS
 from dateutil.relativedelta import relativedelta
 
 
@@ -159,6 +159,14 @@ class StockerPredictor:
             result["one_month_forecast"] = forecast_horizon(
                 self.df, horizon=MONTH_TRADING_DAYS
             )
+            result["one_month_forecast"]["curve"] = forecast_curve(
+                self.df, horizon=MONTH_TRADING_DAYS
+            )
+            self._rebase_forecast_to_price(
+                result["one_month_forecast"],
+                historical_price=float(last_row["Close"]),
+                current_price=current_price,
+            )
         except ValueError as exc:
             result["one_month_forecast"] = {
                 "confidence": "unavailable",
@@ -276,6 +284,28 @@ class StockerPredictor:
                 print(f"[predictor] Failed to log live prediction I/O: {exc}")
 
         return result
+
+    @staticmethod
+    def _rebase_forecast_to_price(
+        forecast: dict,
+        historical_price: float,
+        current_price: float,
+    ) -> None:
+        """Express forecast prices from the live quote while keeping returns fixed."""
+        if historical_price <= 0 or current_price <= 0:
+            return
+        scale = current_price / historical_price
+        forecast["predicted_price"] = round(
+            float(forecast["predicted_price"]) * scale, 2
+        )
+        curve = forecast.get("curve")
+        if not curve:
+            return
+        curve["current_price"] = round(current_price, 2)
+        for point in curve.get("points", []):
+            for key in ("predicted_price", "lower_price", "upper_price"):
+                if key in point:
+                    point[key] = round(float(point[key]) * scale, 2)
 
     def _fetch_live_price(self, fallback_price: float) -> tuple[float, str, bool]:
         """
