@@ -44,6 +44,7 @@ button { cursor: pointer; }
 }
 
 .app-shell { max-width: var(--content); margin: 0 auto; padding: 0 24px 48px; }
+.site-header.app-shell { padding-bottom: 0; }
 .site-header {
   position: sticky; top: 0; z-index: 10; height: 64px;
   display: flex; align-items: center; justify-content: space-between;
