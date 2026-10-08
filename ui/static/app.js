@@ -137,21 +137,25 @@ function renderMonthForecastChart(curve) {
   const historyLastClose = history.length
     ? Number(history[history.length - 1].close)
     : Number(curve.current_price);
+  const toChangePct = (price) => ((Number(price) / historyLastClose) - 1) * 100;
   const forecastValues = [
     ...history.slice(0, -1).map(() => null),
-    historyLastClose,
-    ...curve.points.map((point) => Number(point.predicted_price)),
+    0,
+    ...curve.points.map((point) => toChangePct(point.predicted_price)),
   ];
   const lowerValues = [
     ...history.slice(0, -1).map(() => null),
-    historyLastClose,
-    ...curve.points.map((point) => Number(point.lower_price)),
+    0,
+    ...curve.points.map((point) => toChangePct(point.lower_price)),
   ];
   const upperValues = [
     ...history.slice(0, -1).map(() => null),
-    historyLastClose,
-    ...curve.points.map((point) => Number(point.upper_price)),
+    0,
+    ...curve.points.map((point) => toChangePct(point.upper_price)),
   ];
+  const historyChanges = actualValues.map((value) => (
+    value === null ? null : toChangePct(value)
+  ));
 
   state.monthForecastChart = new Chart(ctx, {
     type: "line",
@@ -160,7 +164,7 @@ function renderMonthForecastChart(curve) {
       datasets: [
         {
           label: "Actual close",
-          data: actualValues,
+          data: historyChanges,
           borderColor: getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#6b706b",
           borderWidth: 1.5,
           pointRadius: 0,
@@ -202,13 +206,21 @@ function renderMonthForecastChart(curve) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (context) => `INR ${Number(context.raw).toFixed(2)}`,
+            label: (context) => {
+              const raw = Number(context.raw);
+              const price = historyLastClose * (1 + raw / 100);
+              return `${raw >= 0 ? "+" : ""}${raw.toFixed(2)}% · ${formatINR(price)}`;
+            },
           },
         },
       },
       scales: {
         x: { title: { display: false }, grid: { display: false } },
-        y: { title: { display: false }, grid: { color: "rgba(128,128,128,0.16)" } },
+        y: {
+          title: { display: true, text: "Change from latest close" },
+          ticks: { callback: (value) => `${value >= 0 ? "+" : ""}${Number(value).toFixed(1)}%` },
+          grid: { color: "rgba(128,128,128,0.16)" },
+        },
       },
     },
   });
@@ -440,7 +452,7 @@ async function runLivePrediction(forceRefresh = false) {
           <canvas id="monthForecastChart"></canvas>
         </div>
         <p class="forecast-meta">
-          Recent prices are grey. The dashed line is the possible path; the light band shows a range of past outcomes.
+          The chart shows percentage change from the latest close. The dashed line is the point estimate; the shaded cone shows the uncertainty range.
         </p>`;
       renderMonthForecastChart(month.curve);
     } else {
