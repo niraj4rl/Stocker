@@ -46,15 +46,18 @@ class RegimeDetector:
     def predict(self, df: pd.DataFrame) -> pd.Series:
         if not self.is_fitted:
             raise RuntimeError("RegimeDetector must be fitted before predict()")
-        obs = self._build_observations(df)
-        valid_mask = ~np.isnan(obs).any(axis=1)
+        # HMM ``predict`` uses a backward pass and therefore lets later
+        # observations influence earlier labels. Use a filtered rule for the
+        # live label instead: every threshold is derived from prior bars only.
+        returns = df["log_return"].astype(float)
+        trailing_return = returns.rolling(21, min_periods=5).mean()
+        volatility = returns.rolling(REGIME_WINDOW, min_periods=10).std()
+        prior_vol_median = volatility.shift(1).expanding(min_periods=20).median()
+        high_vol = volatility > (prior_vol_median * 1.5)
         result = pd.Series(REGIME_HIGHVOL, index=df.index)
-
-        if valid_mask.sum() > 0:
-            states = self.model.predict(obs[valid_mask])
-            labels = [self.state_to_regime.get(s, REGIME_HIGHVOL) for s in states]
-            result[valid_mask] = labels
-        return result
+        result.loc[~high_vol & trailing_return.ge(0)] = REGIME_BULL
+        result.loc[~high_vol & trailing_return.lt(0)] = REGIME_BEAR
+        return result.fillna(REGIME_HIGHVOL)
 
     def predict_current(self, recent_df: pd.DataFrame) -> str:
         labels = self.predict(recent_df)
@@ -66,7 +69,6 @@ class RegimeDetector:
             pd.Series(log_ret)
             .rolling(REGIME_WINDOW)
             .std()
-            .bfill()
             .fillna(0)
             .values
             * np.sqrt(TRADING_DAYS_YEAR)
@@ -137,6 +139,14 @@ def get_regime_stats(df: pd.DataFrame, regime_labels: pd.Series) -> pd.DataFrame
         mask = df["regime"] == regime
         sub = df[mask]
         if len(sub) == 0:
+            stats.append({
+                "regime": regime,
+                "count": 0,
+                "pct_of_days": 0.0,
+                "mean_daily_return": None,
+                "mean_vol_ann": None,
+                "status": "insufficient",
+            })
             continue
         stats.append({
             "regime": regime,
@@ -144,5 +154,6 @@ def get_regime_stats(df: pd.DataFrame, regime_labels: pd.Series) -> pd.DataFrame
             "pct_of_days": round(mask.mean() * 100, 1),
             "mean_daily_return": round(sub["pct_return"].mean() * 100, 3),
             "mean_vol_ann": round(sub["log_return"].std() * np.sqrt(TRADING_DAYS_YEAR) * 100, 1),
+            "status": "ok",
         })
     return pd.DataFrame(stats)

@@ -39,13 +39,18 @@ def fetch_ohlcv(
     Fetch OHLCV data using robust multi-source fetcher.
     Guarantees real data or raises error (no synthetic fallback).
     """
-    return fetch_ohlcv_robust(
+    df = fetch_ohlcv_robust(
         ticker=ticker,
         period=period,
         force_refresh=force_refresh,
         data_source=data_source,
         access_token=access_token,
     )
+    if "Volume" in df.columns:
+        df = df.loc[df["Volume"].fillna(0) > 0].copy()
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    _assert_data_quality(df, ticker)
+    return df
 
 
 def load_or_fetch(

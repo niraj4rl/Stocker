@@ -46,7 +46,7 @@ REGIME_CAP_BEAR = float(os.environ.get("STOCKER_REGIME_CAP_BEAR", "0.7"))
 REGIME_CAP_HIGHVOL = float(os.environ.get("STOCKER_REGIME_CAP_HIGHVOL", "0.4"))
 
 # Data quality guardrails
-MIN_DATA_ROWS = int(os.environ.get("STOCKER_MIN_DATA_ROWS", "252"))
+MIN_DATA_ROWS = int(os.environ.get("STOCKER_MIN_DATA_ROWS", "420"))
 MAX_STALE_DAYS = int(os.environ.get("STOCKER_MAX_STALE_DAYS", "12"))
 
 # Live predictor refresh controls
@@ -58,4 +58,3 @@ UPSTOX_API_KEY = os.environ.get("UPSTOX_API_KEY", "")
 UPSTOX_API_SECRET = os.environ.get("UPSTOX_API_SECRET", "")
 UPSTOX_REDIRECT_URI = os.environ.get("UPSTOX_REDIRECT_URI", "https://127.0.0.1")
 UPSTOX_ACCESS_TOKEN = os.environ.get("UPSTOX_ACCESS_TOKEN", "")
-

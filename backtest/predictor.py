@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timezone
 from data.ingestion import load_or_fetch
 from features.engineering import build_features, get_feature_cols
-from regime.detector import RegimeDetector
+from regime.detector import RegimeDetector, label_regimes_expanding
 from models.trainer import ModelTrainer, _cls_label_to_signal
 from router.adaptive import AdaptiveRouter
 from utils.config import (
@@ -37,6 +37,16 @@ MODEL_DISPLAY_NAMES = {
     "knn": "K-Nearest Neighbors",
     "mlp": "Neural Network (MLP)",
 }
+
+
+def monthly_signal(predicted_return: float, validation_mae: float) -> str:
+    """Map a monthly return to a signal only when it clears estimated noise."""
+    threshold = max(SIGNAL_DEADBAND, float(validation_mae))
+    if predicted_return > threshold:
+        return "Buy"
+    if predicted_return < -threshold:
+        return "Sell"
+    return "Hold"
 
 
 def _get_model_name(model) -> str:
@@ -83,7 +93,7 @@ class StockerPredictor:
             force_refresh=force_refresh,
             data_source=self.data_source,
             access_token=self.access_token,
-            period="2y",
+            period="5y",
         )
         self.df = build_features(raw)
 
@@ -93,7 +103,7 @@ class StockerPredictor:
         self.detector = RegimeDetector()
         self.detector.fit(train_df)
 
-        regime_labels = self.detector.predict(train_df)
+        regime_labels = label_regimes_expanding(train_df)
 
         trainer = ModelTrainer()
         self.registry = trainer.train_for_fold(
@@ -153,6 +163,7 @@ class StockerPredictor:
             "predicted_price": None,
             "predicted_return_pct": None,
             "model_validation_sharpe": None,
+            "verdict_horizon_days": MONTH_TRADING_DAYS,
         }
 
         try:
@@ -194,9 +205,10 @@ class StockerPredictor:
             signal = "Buy" if pred_return > SIGNAL_DEADBAND else ("Sell" if pred_return < -SIGNAL_DEADBAND else "Hold")
             result.update({
                 "prediction": round(pred_return * 100, 4),
+                "next_day_predicted_return_pct": round(pred_return * 100, 4),
                 "predicted_return_pct": round(pred_return * 100, 4),
                 "predicted_price": round(pred_price, 2),
-                "signal": signal,
+                "next_day_signal": signal,
             })
 
         else:
@@ -212,9 +224,29 @@ class StockerPredictor:
             signal = signal_map.get(pred_label, "Hold")
             result.update({
                 "prediction": pred_label,
-                "signal": signal,
+                "next_day_signal": signal,
                 "confidence": round(confidence * 100, 1) if confidence else None,
             })
+
+        month_forecast = result.get("one_month_forecast", {})
+        if not month_forecast.get("error"):
+            month_return = float(month_forecast["predicted_return_pct"]) / 100
+            noise = float(month_forecast.get("validation_mae", 0)) / 100
+            monthly_signal_value = monthly_signal(month_return, noise)
+            result["signal_reliable"] = bool(month_forecast.get("validation_passed"))
+            result["signal"] = monthly_signal_value if result["signal_reliable"] else "Hold"
+            selected_model = month_forecast.get("selected_model")
+            model_labels = {
+                "naive_zero": "Naive zero-return",
+                "last_20d_mean": "Recent mean",
+                "momentum_5d": "Short-term momentum",
+                "ridge": "Ridge Regression",
+                "elastic_net": "ElasticNet",
+                "regularized_tree": "Regularized tree",
+            }
+            result["ml_model"] = model_labels.get(
+                selected_model, result["ml_model"]
+            )
 
         if regime in self.registry and paradigm in self.registry[regime]:
             result["model_validation_sharpe"] = self.registry[regime][paradigm].get("sharpe")

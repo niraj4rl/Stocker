@@ -356,15 +356,14 @@ async function runLivePrediction(forceRefresh = false) {
     document.documentElement.style.setProperty("--accent", signalColor);
     $("stockTitle").textContent = result.ticker || payload.ticker;
     $("stockPrice").textContent = formatINR(result.current_price);
-    $("signalBadge").innerHTML = `<span class='verdict'><i class='verdict-dot'></i>${result.signal || "Hold"}</span>`;
+    const displayedSignal = result.signal_reliable === false ? "No reliable signal" : (result.signal || "Hold");
+    $("signalBadge").innerHTML = `<span class='verdict'><i class='verdict-dot'></i>${displayedSignal}</span>`;
 
     if (result.paradigm === "regression") {
-      const ret = Number(result.predicted_return_pct || 0);
-      const nextPrice = result.predicted_price ? Number(result.predicted_price).toFixed(2) : "-";
-      $("predictionText").textContent = `Possible next-day move ${signedPercent(ret, 3)} · target ${formatINR(nextPrice)}`;
+      const ret = Number(result.next_day_predicted_return_pct || result.predicted_return_pct || 0);
+      $("predictionText").textContent = `Possible next-day move ${signedPercent(ret, 3)}. The verdict above refers to the next-month outlook.`;
     } else {
-      const conf = result.confidence !== null && result.confidence !== undefined ? `${result.confidence}%` : "N/A";
-      $("predictionText").textContent = `Direction: ${result.prediction || "-"} · confidence ${conf}`;
+      $("predictionText").textContent = `Next-day direction: ${result.prediction || "-"}. The verdict above refers to the next-month outlook.`;
     }
 
     const routing = Object.entries(result.routing_table || {})
@@ -386,7 +385,7 @@ async function runLivePrediction(forceRefresh = false) {
     const regimeLabels = { Bull: "Bull", Bear: "Bear", HighVol: "High Vol" };
     const regimeStatsByName = Object.fromEntries((data.regime_stats || []).map((row) => [row.regime, row]));
     const regimeRows = ["Bull", "Bear", "HighVol"].map((name) => ({
-      ...(regimeStatsByName[name] || { count: 0, pct_of_days: 0, mean_daily_return: 0, mean_vol_ann: 0 }),
+      ...(regimeStatsByName[name] || { count: 0, pct_of_days: 0, mean_daily_return: null, mean_vol_ann: null }),
       regime: regimeLabels[name],
     }));
     const regimeCountTotal = regimeRows.reduce((sum, row) => sum + Number(row.count || 0), 0);

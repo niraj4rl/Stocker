@@ -212,7 +212,7 @@ def _rank_one_ticker(ticker: str) -> dict:
     for attempt in range(3):
         try:
             raw = fetch_ohlcv_robust(
-                ticker, period="2y", data_source=DATA_SOURCE, access_token=UPSTOX_ACCESS_TOKEN
+                ticker, period="5y", data_source=DATA_SOURCE, access_token=UPSTOX_ACCESS_TOKEN
             )
             forecast = fast_screen_ticker(raw)
             break
@@ -223,6 +223,14 @@ def _rank_one_ticker(ticker: str) -> dict:
     else:
         raise ValueError(f"{ticker}: data could not be loaded after 3 attempts ({last_error})")
     current_price = float(raw["Close"].iloc[-1])
+    avg_traded_value = float((raw["Close"] * raw["Volume"]).tail(60).mean())
+    if current_price < 20:
+        raise ValueError(f"{ticker}: excluded: price below ₹20 quality floor")
+    if avg_traded_value < 5_000_000:
+        raise ValueError(f"{ticker}: excluded: average traded value below ₹50 lakh")
+    monthly_return = float(forecast["one_month"]["predicted_return_pct"])
+    forecast_error = float(forecast["one_month"]["validation_mae"])
+    risk_adjusted_return = monthly_return / max(1.0, forecast_error)
     return {
         "ticker": ticker,
         # Keep the one-day value in the API for consumers that already use it,
@@ -235,7 +243,10 @@ def _rank_one_ticker(ticker: str) -> dict:
         "current_price_is_fallback": True,
         "regime": "screening",
         "model": forecast["screen_model"],
-        "one_month_return_pct": forecast["one_month"]["predicted_return_pct"],
+        "one_month_return_pct": monthly_return,
+        "validation_mae_pct": forecast_error,
+        "risk_adjusted_return_pct": round(risk_adjusted_return, 4),
+        "avg_traded_value": round(avg_traded_value, 2),
         "one_month_predicted_price": forecast["one_month"]["predicted_price"],
         "one_month_confidence": forecast["one_month"]["confidence"],
         "one_month_validation_passed": forecast["one_month"]["validation_passed"],
@@ -251,7 +262,7 @@ def _ranking_universe() -> list[str]:
 
 def _ranking_sort_key(item: dict) -> tuple:
     """Sort by monthly return, preferring validated forecasts on ties."""
-    monthly_return = item.get("one_month_return_pct")
+    monthly_return = item.get("risk_adjusted_return_pct")
     validation_passed = item.get("one_month_validation_passed", False)
     if monthly_return is None:
         return (0, 0.0, 0, "")

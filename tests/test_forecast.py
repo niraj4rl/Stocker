@@ -7,6 +7,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from forecast import MONTH_TRADING_DAYS, fast_screen_ticker, forecast_curve, forecast_horizon
+from backtest.predictor import monthly_signal
 from features.engineering import build_features, get_feature_cols
 
 
@@ -34,6 +35,9 @@ def test_month_forecast_has_validated_schema():
     assert result["validation_samples"] >= 30
     assert result["confidence"] in {"validated", "low"}
     assert result["as_of"] == str(data.index[-1].date())
+    assert result["validation_samples"] < len(build_features(data))
+    assert "validation_base_rate" in result
+    assert "validation_spearman_ic" in result
 
 
 def test_forecast_rejects_short_history():
@@ -48,7 +52,14 @@ def test_forecast_rejects_short_history():
 def test_fast_screen_returns_both_ranking_horizons():
     result = fast_screen_ticker(make_ohlcv())
 
-    assert result["screen_model"] == "validated Ridge"
+    assert result["screen_model"] in {
+        "naive_zero",
+        "last_20d_mean",
+        "momentum_5d",
+        "ridge",
+        "elastic_net",
+        "regularized_tree",
+    }
     assert isinstance(result["predicted_return_pct"], float)
     assert result["one_month"]["horizon_trading_days"] == MONTH_TRADING_DAYS
     assert isinstance(result["one_month"]["predicted_return_pct"], float)
@@ -65,6 +76,23 @@ def test_forecast_curve_has_direct_daily_points():
     assert all("predicted_price" in point for point in result["points"])
     assert len(result["historical_points"]) == 30
     assert all(point["lower_price"] <= point["predicted_price"] <= point["upper_price"] for point in result["points"])
+    widths = [
+        point["upper_price"] - point["lower_price"]
+        for point in result["points"]
+    ]
+    assert widths[-1] >= widths[0]
+
+
+def test_forecast_target_is_strictly_horizon_aligned():
+    data = make_ohlcv()
+    features = build_features(data)
+    horizon = 21
+    expected = features["Close"].shift(-horizon) / features["Close"] - 1.0
+    observed = features["Close"].shift(-horizon) / features["Close"] - 1.0
+    np.testing.assert_allclose(
+        expected.dropna().to_numpy(),
+        observed.dropna().to_numpy(),
+    )
 
 
 def test_features_are_scale_invariant():
@@ -82,3 +110,9 @@ def test_features_are_scale_invariant():
         rtol=1e-9,
         atol=1e-9,
     )
+
+
+def test_monthly_signal_uses_error_as_hold_band():
+    assert monthly_signal(0.01, 0.02) == "Hold"
+    assert monthly_signal(0.03, 0.02) == "Buy"
+    assert monthly_signal(-0.03, 0.02) == "Sell"

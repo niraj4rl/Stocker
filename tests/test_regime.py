@@ -62,3 +62,10 @@ def test_state_mapping_covers_all_states():
     assert len(d.state_to_regime) == d.n_components
     for v in d.state_to_regime.values():
         assert v in REGIME_LABELS
+
+
+def test_initial_volatility_warmup_does_not_use_future_values():
+    df = make_dummy_df(80)
+    detector = RegimeDetector()
+    observations = detector._build_observations(df)
+    assert np.allclose(observations[:19, 1], 0.0)
